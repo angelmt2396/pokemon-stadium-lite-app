@@ -56,9 +56,11 @@ class BattleFlowState {
   final String? infoMessage;
 
   bool get isSearching => stage == BattleStage.searching;
+  bool get isBattlePaused =>
+      battleState?.status == 'paused' || battleState?.reconnectDeadlineAt != null;
   bool get canSearch => !actionPending && stage == BattleStage.idle;
   bool get canCancelSearch => !actionPending && stage == BattleStage.searching;
-  bool get canAttack => !actionPending && stage == BattleStage.battling;
+  bool get canAttack => !actionPending && stage == BattleStage.battling && !isBattlePaused;
 
   BattleFlowState copyWith({
     BattleStage? stage,

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -45,6 +47,10 @@ class BattleScreen extends ConsumerWidget {
     final isLocalTurn = session != null &&
         battleState != null &&
         battleState.currentTurnPlayerId == session.playerId;
+    final isBattlePaused = state.isBattlePaused;
+    final isSelfDisconnected =
+        battleState?.disconnectedPlayerId != null &&
+        battleState?.disconnectedPlayerId == session?.playerId;
     final searchElapsed = controller.searchElapsed;
     final localCanAssignTeam = state.stage == BattleStage.matched &&
         !state.actionPending &&
@@ -99,6 +105,11 @@ class BattleScreen extends ConsumerWidget {
                   const StatusChip(
                     label: 'BATTLE LIVE',
                     tone: StatusChipTone.warning,
+                  ),
+                if (state.stage == BattleStage.battling && isBattlePaused)
+                  const StatusChip(
+                    label: 'PAUSED',
+                    tone: StatusChipTone.dark,
                   ),
                 if (state.stage == BattleStage.result)
                   StatusChip(
@@ -194,6 +205,9 @@ class BattleScreen extends ConsumerWidget {
                       localPlayer: localBattlePlayer,
                       opponentPlayer: opponentBattlePlayer,
                       isLocalTurn: isLocalTurn,
+                      isPaused: isBattlePaused,
+                      isSelfDisconnected: isSelfDisconnected,
+                      reconnectDeadlineAt: battleState.reconnectDeadlineAt,
                       latestTurnResult: latestTurnResult,
                     )
                   else if (state.stage == BattleStage.result && battleResult != null)
@@ -325,7 +339,9 @@ class BattleScreen extends ConsumerWidget {
                     ),
                   if (state.stage == BattleStage.battling)
                     PrimaryButton(
-                      label: state.actionPending
+                      label: isBattlePaused
+                          ? 'Batalla en pausa'
+                          : state.actionPending
                           ? 'Atacando...'
                           : isLocalTurn
                               ? 'Atacar'
@@ -547,109 +563,287 @@ class _ActiveBattleHud extends StatelessWidget {
     required this.localPlayer,
     required this.opponentPlayer,
     required this.isLocalTurn,
+    required this.isPaused,
+    required this.isSelfDisconnected,
+    required this.reconnectDeadlineAt,
     required this.latestTurnResult,
   });
 
   final BattlePlayerSnapshot? localPlayer;
   final BattlePlayerSnapshot? opponentPlayer;
   final bool isLocalTurn;
+  final bool isPaused;
+  final bool isSelfDisconnected;
+  final DateTime? reconnectDeadlineAt;
   final TurnResultSnapshot? latestTurnResult;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
+    return Stack(
+      children: [
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(AppSpacing.md),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(AppRadii.lg),
+            gradient: const LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [AppColors.gameNavyTop, AppColors.gameNavyBottom],
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Wrap(
+                spacing: AppSpacing.sm,
+                runSpacing: AppSpacing.sm,
+                children: [
+                  StatusChip(
+                    label: isLocalTurn ? 'YOUR TURN' : 'RIVAL TURN',
+                    tone: isLocalTurn ? StatusChipTone.success : StatusChipTone.dark,
+                  ),
+                  if (latestTurnResult != null)
+                    const StatusChip(
+                      label: 'TURN RESOLVED',
+                      tone: StatusChipTone.warning,
+                    ),
+                  if (isPaused)
+                    const StatusChip(
+                      label: 'BATTLE PAUSED',
+                      tone: StatusChipTone.dark,
+                    ),
+                ],
+              ),
+              const SizedBox(height: AppSpacing.md),
+              _ActivePokemonPanel(
+                label: 'Rival',
+                pokemon: opponentPlayer?.activePokemon,
+                alignEnd: true,
+              ),
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: AppSpacing.md),
+                child: Center(
+                  child: StatusChip(label: 'VS', tone: StatusChipTone.info),
+                ),
+              ),
+              _ActivePokemonPanel(
+                label: 'Tu Pokémon',
+                pokemon: localPlayer?.activePokemon,
+                alignEnd: false,
+              ),
+              if (latestTurnResult != null) ...[
+                const SizedBox(height: AppSpacing.lg),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(AppSpacing.md),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(AppRadii.lg),
+                    border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        latestTurnResult!.defenderDefeated
+                            ? 'Golpe definitivo'
+                            : 'Daño aplicado',
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.xs),
+                      Text(
+                        latestTurnResult!.defenderDefeated
+                            ? 'El Pokémon defensor quedó fuera de combate tras recibir ${latestTurnResult!.damage} de daño.'
+                            : 'El defensor recibió ${latestTurnResult!.damage} de daño y quedó con ${latestTurnResult!.defenderRemainingHp} PS.',
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: Colors.white70,
+                        ),
+                      ),
+                      if (latestTurnResult!.autoSwitchedPokemon?.pokemon != null) ...[
+                        const SizedBox(height: AppSpacing.sm),
+                        Text(
+                          'Cambio automático: ${latestTurnResult!.autoSwitchedPokemon!.pokemon!.name} entró al campo.',
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+        if (isPaused)
+          Positioned.fill(
+            child: _BattlePauseOverlay(
+              isSelfDisconnected: isSelfDisconnected,
+              reconnectDeadlineAt: reconnectDeadlineAt,
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _BattlePauseOverlay extends StatelessWidget {
+  const _BattlePauseOverlay({
+    required this.isSelfDisconnected,
+    required this.reconnectDeadlineAt,
+  });
+
+  final bool isSelfDisconnected;
+  final DateTime? reconnectDeadlineAt;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.primaryDark.withValues(alpha: 0.78),
+        borderRadius: BorderRadius.circular(AppRadii.lg),
+      ),
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      child: Center(
+        child: Container(
+          width: double.infinity,
+          constraints: const BoxConstraints(maxWidth: 420),
+          padding: const EdgeInsets.all(AppSpacing.lg),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(AppRadii.xl),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              StatusChip(
+                label: isSelfDisconnected ? 'RECONNECTING' : 'WAITING OPPONENT',
+                tone: isSelfDisconnected
+                    ? StatusChipTone.warning
+                    : StatusChipTone.info,
+              ),
+              const SizedBox(height: AppSpacing.md),
+              Text(
+                isSelfDisconnected
+                    ? 'Tu conexión salió de la arena'
+                    : 'Esperando al rival',
+                style: theme.textTheme.headlineSmall?.copyWith(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              Text(
+                isSelfDisconnected
+                    ? 'La batalla seguirá en pausa hasta que la reconexión se resuelva o expire el contador.'
+                    : 'La arena está congelada mientras el otro jugador intenta volver.',
+                style: theme.textTheme.bodyLarge?.copyWith(
+                  color: Colors.white70,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.lg),
+              _ReconnectCountdown(deadlineAt: reconnectDeadlineAt),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ReconnectCountdown extends StatefulWidget {
+  const _ReconnectCountdown({
+    required this.deadlineAt,
+  });
+
+  final DateTime? deadlineAt;
+
+  @override
+  State<_ReconnectCountdown> createState() => _ReconnectCountdownState();
+}
+
+class _ReconnectCountdownState extends State<_ReconnectCountdown> {
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _startTicker();
+  }
+
+  @override
+  void didUpdateWidget(covariant _ReconnectCountdown oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.deadlineAt != widget.deadlineAt) {
+      _startTicker();
+    }
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  void _startTicker() {
+    _timer?.cancel();
+    if (widget.deadlineAt == null) {
+      return;
+    }
+
+    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) {
+        setState(() {});
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final deadline = widget.deadlineAt;
+    final remaining = deadline == null
+        ? Duration.zero
+        : deadline.difference(DateTime.now());
+    final clamped = remaining.isNegative ? Duration.zero : remaining;
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(AppRadii.lg),
-        gradient: const LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [AppColors.gameNavyTop, AppColors.gameNavyBottom],
-        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Wrap(
-            spacing: AppSpacing.sm,
-            runSpacing: AppSpacing.sm,
-            children: [
-              StatusChip(
-                label: isLocalTurn ? 'YOUR TURN' : 'RIVAL TURN',
-                tone: isLocalTurn ? StatusChipTone.success : StatusChipTone.dark,
-              ),
-              if (latestTurnResult != null)
-                const StatusChip(
-                  label: 'TURN RESOLVED',
-                  tone: StatusChipTone.warning,
-                ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.md),
-          _ActivePokemonPanel(
-            label: 'Rival',
-            pokemon: opponentPlayer?.activePokemon,
-            alignEnd: true,
-          ),
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: AppSpacing.md),
-            child: Center(
-              child: StatusChip(label: 'VS', tone: StatusChipTone.info),
+          Text(
+            'Tiempo restante',
+            style: theme.textTheme.labelLarge?.copyWith(
+              color: Colors.white70,
+              letterSpacing: 1.1,
+              fontWeight: FontWeight.w700,
             ),
           ),
-          _ActivePokemonPanel(
-            label: 'Tu Pokémon',
-            pokemon: localPlayer?.activePokemon,
-            alignEnd: false,
-          ),
-          if (latestTurnResult != null) ...[
-            const SizedBox(height: AppSpacing.lg),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(AppSpacing.md),
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(AppRadii.lg),
-                border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    latestTurnResult!.defenderDefeated
-                        ? 'Golpe definitivo'
-                        : 'Daño aplicado',
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                  const SizedBox(height: AppSpacing.xs),
-                  Text(
-                    latestTurnResult!.defenderDefeated
-                        ? 'El Pokémon defensor quedó fuera de combate tras recibir ${latestTurnResult!.damage} de daño.'
-                        : 'El defensor recibió ${latestTurnResult!.damage} de daño y quedó con ${latestTurnResult!.defenderRemainingHp} PS.',
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: Colors.white70,
-                    ),
-                  ),
-                  if (latestTurnResult!.autoSwitchedPokemon?.pokemon != null) ...[
-                    const SizedBox(height: AppSpacing.sm),
-                    Text(
-                      'Cambio automático: ${latestTurnResult!.autoSwitchedPokemon!.pokemon!.name} entró al campo.',
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ],
-                ],
-              ),
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            _formatDuration(clamped),
+            style: theme.textTheme.headlineMedium?.copyWith(
+              color: Colors.white,
+              fontWeight: FontWeight.w900,
             ),
-          ],
+          ),
         ],
       ),
     );
@@ -868,8 +1062,9 @@ String _subtitleForState(
       'Permaneces en cola hasta encontrar un rival compatible.',
     BattleStage.matched =>
       'Ya hay rival en la sala${opponentNickname == null ? '' : ': $opponentNickname'}. Asigna equipo y marca listo.',
-    BattleStage.battling =>
-      'El combate ya está activo. Ataca sólo cuando el turno te pertenezca.',
+    BattleStage.battling => state.isBattlePaused
+        ? 'La arena está en pausa mientras se resuelve una reconexión.'
+        : 'El combate ya está activo. Ataca sólo cuando el turno te pertenezca.',
     BattleStage.result => battleResult == null
         ? 'El backend marcó el cierre de la batalla.'
         : battleResult.winnerPlayerId == sessionPlayerId

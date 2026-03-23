@@ -13,6 +13,7 @@ class SocketEvents {
   static const serverLobbyStatus = 'lobby_status';
   static const serverBattleStart = 'battle_start';
   static const serverBattlePause = 'battle_pause';
+  static const serverBattleResume = 'battle_resume';
   static const serverTurnResult = 'turn_result';
   static const serverBattleEnd = 'battle_end';
 }

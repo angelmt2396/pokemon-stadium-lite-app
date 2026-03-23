@@ -309,7 +309,9 @@ class BattleController extends AutoDisposeNotifier<BattleFlowState> {
               ? 'Sala recuperada. Esperando siguiente paso.'
               : stage == BattleStage.searching
                   ? 'Volviste a la cola activa.'
-                  : 'Se restauró una batalla activa.',
+                  : battleState?.reconnectDeadlineAt != null
+                      ? 'La batalla sigue pausada mientras se resuelve una reconexión.'
+                      : 'Se restauró una batalla activa.',
         );
       } catch (error) {
         state = state.copyWith(
@@ -437,6 +439,12 @@ class BattleController extends AutoDisposeNotifier<BattleFlowState> {
         _setSearchTicker(false);
         unawaited(_applyBattleStart(battleState));
       },
+      onBattlePause: (battleState) {
+        unawaited(_applyBattlePause(battleState, currentPlayerId));
+      },
+      onBattleResume: (battleState) {
+        unawaited(_applyBattleResume(battleState));
+      },
       onTurnResult: (result) {
         _applyTurnResult(result);
       },
@@ -482,6 +490,52 @@ class BattleController extends AutoDisposeNotifier<BattleFlowState> {
     );
   }
 
+  Future<void> _applyBattlePause(
+    BattleStateSnapshot battleState,
+    String currentPlayerId,
+  ) async {
+    await ref.read(sessionControllerProvider.notifier).updateRuntimeSession(
+          playerStatus: battleState.status,
+          currentLobbyId: battleState.lobbyId,
+          currentBattleId: battleState.battleId,
+        );
+
+    final isSelfDisconnected = battleState.disconnectedPlayerId == currentPlayerId;
+    state = state.copyWith(
+      actionPending: false,
+      stage: BattleStage.battling,
+      battleState: battleState,
+      clearLatestTurnResult: true,
+      clearBattleResult: true,
+      clearErrorMessage: true,
+      infoMessage: isSelfDisconnected
+          ? 'Tu conexión salió de la arena. Reingresa antes de que termine el contador.'
+          : 'El rival se desconectó. La batalla está en pausa.',
+    );
+  }
+
+  Future<void> _applyBattleResume(BattleStateSnapshot battleState) async {
+    await ref.read(sessionControllerProvider.notifier).updateRuntimeSession(
+          playerStatus: battleState.status,
+          currentLobbyId: battleState.lobbyId,
+          currentBattleId: battleState.battleId,
+        );
+
+    state = state.copyWith(
+      actionPending: false,
+      stage: BattleStage.battling,
+      battleState: battleState.copyWith(
+        clearReconnectDeadlineAt: true,
+        clearDisconnectedPlayerId: true,
+        clearFinishReason: true,
+      ),
+      clearLatestTurnResult: true,
+      clearBattleResult: true,
+      clearErrorMessage: true,
+      infoMessage: 'La batalla se reanudó.',
+    );
+  }
+
   void _applyTurnResult(TurnResultSnapshot result) {
     final currentBattleState = state.battleState;
     if (currentBattleState == null) {
@@ -499,6 +553,9 @@ class BattleController extends AutoDisposeNotifier<BattleFlowState> {
       battleState: currentBattleState.copyWith(
         status: result.battleStatus,
         currentTurnPlayerId: result.nextTurnPlayerId,
+        clearDisconnectedPlayerId: true,
+        clearReconnectDeadlineAt: true,
+        clearFinishReason: true,
         players: updatedPlayers,
       ),
       clearErrorMessage: true,

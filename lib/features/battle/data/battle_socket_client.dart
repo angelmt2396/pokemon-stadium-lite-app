@@ -14,6 +14,8 @@ typedef SearchStatusHandler = void Function(SearchStatusEvent event);
 typedef LobbyStatusHandler = void Function(BattleLobbyStatus status);
 typedef MatchFoundHandler = void Function(BattleLobbyStatus status);
 typedef BattleStartHandler = void Function(BattleStateSnapshot battleState);
+typedef BattlePauseHandler = void Function(BattleStateSnapshot battleState);
+typedef BattleResumeHandler = void Function(BattleStateSnapshot battleState);
 typedef TurnResultHandler = void Function(TurnResultSnapshot result);
 typedef BattleEndHandler = void Function(BattleEndSnapshot result);
 typedef SimpleSocketStateHandler = void Function();
@@ -201,6 +203,8 @@ class BattleSocketClient {
     LobbyStatusHandler? onLobbyStatus,
     MatchFoundHandler? onMatchFound,
     BattleStartHandler? onBattleStart,
+    BattlePauseHandler? onBattlePause,
+    BattleResumeHandler? onBattleResume,
     TurnResultHandler? onTurnResult,
     BattleEndHandler? onBattleEnd,
   }) {
@@ -211,6 +215,8 @@ class BattleSocketClient {
     _socket.off(SocketEvents.serverLobbyStatus);
     _socket.off(SocketEvents.serverMatchFound);
     _socket.off(SocketEvents.serverBattleStart);
+    _socket.off(SocketEvents.serverBattlePause);
+    _socket.off(SocketEvents.serverBattleResume);
     _socket.off(SocketEvents.serverTurnResult);
     _socket.off(SocketEvents.serverBattleEnd);
 
@@ -240,6 +246,12 @@ class BattleSocketClient {
     });
     _socket.on(SocketEvents.serverBattleStart, (payload) {
       onBattleStart?.call(BattleStateSnapshot.fromJson(_mapOf(payload)));
+    });
+    _socket.on(SocketEvents.serverBattlePause, (payload) {
+      onBattlePause?.call(BattleStateSnapshot.fromJson(_mapOf(payload)));
+    });
+    _socket.on(SocketEvents.serverBattleResume, (payload) {
+      onBattleResume?.call(BattleStateSnapshot.fromJson(_mapOf(payload)));
     });
     _socket.on(SocketEvents.serverTurnResult, (payload) {
       onTurnResult?.call(TurnResultSnapshot.fromJson(_mapOf(payload)));
