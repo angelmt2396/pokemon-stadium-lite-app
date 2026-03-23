@@ -287,6 +287,107 @@ class AppStrings {
         ? 'Your team closed the match with the upper hand and secured the win.'
         : 'Your team ran out of answers in this arena.';
   }
+
+  String rivalLockedTitle(String nickname) => isEs
+      ? 'Rival detectado: $nickname'
+      : 'Rival locked: $nickname';
+
+  String get rivalLockedBody => isEs
+      ? 'La arena ya cerró el match. Preparando la asignación de equipos.'
+      : 'The arena already locked the match. Preparing team assignment.';
+
+  String teamAssignedTitle(List<String> names) => isEs
+      ? 'Equipo asignado'
+      : 'Team assigned';
+
+  String teamAssignedBody(List<String> names) {
+    final joined = names.join(', ');
+    if (isEs) {
+      return joined.isEmpty
+          ? 'El equipo quedó listo. Sincronizando el siguiente paso.'
+          : 'Tu escuadra quedó definida: $joined.';
+    }
+
+    return joined.isEmpty
+        ? 'The team is ready. Syncing the next step.'
+        : 'Your squad is locked in: $joined.';
+  }
+
+  String battleStartTitle(String ownName, String opponentName) => isEs
+      ? '$ownName vs $opponentName'
+      : '$ownName vs $opponentName';
+
+  String get battleStartBody => isEs
+      ? 'La arena entra en combate. Mantente listo para responder al turno.'
+      : 'The arena is entering combat. Stay ready to answer the turn.';
+
+  String turnActionTitle({
+    required bool localAttacker,
+    required bool ko,
+  }) {
+    if (isEs) {
+      if (ko) {
+        return localAttacker ? 'Golpe definitivo' : 'Tu equipo recibió el golpe final';
+      }
+
+      return localAttacker ? 'Tu ataque impactó' : 'El rival tomó la iniciativa';
+    }
+
+    if (ko) {
+      return localAttacker ? 'Final blow' : 'Your team took the final blow';
+    }
+
+    return localAttacker ? 'Your attack connected' : 'The rival struck first';
+  }
+
+  String turnActionBody({
+    required bool localAttacker,
+    required String defenderName,
+    required int damage,
+    required bool ko,
+  }) {
+    if (isEs) {
+      if (ko) {
+        return '$defenderName quedó fuera de combate tras recibir $damage de daño.';
+      }
+
+      return localAttacker
+          ? '$defenderName recibió $damage de daño.'
+          : '$defenderName absorbió $damage de daño.';
+    }
+
+    if (ko) {
+      return '$defenderName fainted after taking $damage damage.';
+    }
+
+    return localAttacker
+        ? '$defenderName took $damage damage.'
+        : '$defenderName absorbed $damage damage.';
+  }
+
+  String get autoAssigningInfo => isEs
+      ? 'Asignando equipo automáticamente...'
+      : 'Assigning team automatically...';
+
+  String get autoReadyInfo => isEs
+      ? 'Marcando listo automáticamente...'
+      : 'Marking ready automatically...';
+
+  String get lobbyStandbyInfo => isEs
+      ? 'Esperando a que el rival complete su preparación.'
+      : 'Waiting for the rival to finish preparing.';
+
+  String get attackWindowOpen => isEs
+      ? 'Ventana de ataque abierta'
+      : 'Attack window open';
+
+  String get attackWindowClosed => isEs
+      ? 'Defensa activa'
+      : 'Defense active';
+
+  String get arenaLiveLabel => isEs
+      ? 'Arena en vivo'
+      : 'Arena live';
 }
 
 final appStringsProvider = Provider<AppStrings>((ref) {

@@ -35,19 +35,57 @@ class CatalogScreen extends ConsumerWidget {
               icon: const Icon(Icons.arrow_back_rounded),
             ),
             const SizedBox(height: AppSpacing.sm),
-            const StatusChip(label: 'CATÁLOGO', tone: StatusChipTone.info),
-            const SizedBox(height: AppSpacing.md),
-            Text(strings.catalogTitle, style: theme.textTheme.headlineMedium),
-            const SizedBox(height: AppSpacing.sm),
-            Text(
-              strings.catalogSubtitle,
-              style: theme.textTheme.bodyLarge,
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(AppSpacing.lg),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(28),
+                gradient: const LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    AppColors.primaryDark,
+                    AppColors.gameNavyBottom,
+                  ],
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.primaryDark.withValues(alpha: 0.2),
+                    blurRadius: 28,
+                    offset: const Offset(0, 16),
+                  ),
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const StatusChip(label: 'CATÁLOGO', tone: StatusChipTone.info),
+                  const SizedBox(height: AppSpacing.md),
+                  Text(
+                    strings.catalogTitle,
+                    style: theme.textTheme.headlineMedium?.copyWith(
+                      color: Colors.white,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  Text(
+                    strings.catalogSubtitle,
+                    style: theme.textTheme.bodyLarge?.copyWith(
+                      color: Colors.white70,
+                    ),
+                  ),
+                ],
+              ),
             ),
             const SizedBox(height: AppSpacing.lg),
-            GameCard(
-              child: _CatalogDetailPanel(
-                detail: selectedPokemonDetail,
-                strings: strings,
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 220),
+              child: GameCard(
+                key: ValueKey<int?>(selectedPokemonId),
+                child: _CatalogDetailPanel(
+                  detail: selectedPokemonDetail,
+                  strings: strings,
+                ),
               ),
             ),
             const SizedBox(height: AppSpacing.lg),

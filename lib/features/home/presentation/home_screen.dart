@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:pokemon_stadium_lite_app/core/i18n/app_strings.dart';
+import 'package:pokemon_stadium_lite_app/core/theme/app_colors.dart';
 import 'package:pokemon_stadium_lite_app/core/theme/app_spacing.dart';
 import 'package:pokemon_stadium_lite_app/core/widgets/app_scaffold.dart';
 import 'package:pokemon_stadium_lite_app/core/widgets/game_card.dart';
@@ -47,7 +48,27 @@ class HomeScreen extends ConsumerWidget {
               ],
             ),
             const SizedBox(height: AppSpacing.md),
-            GameCard(
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(AppSpacing.lg),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(28),
+                gradient: const LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    AppColors.primaryDark,
+                    AppColors.gameNavyBottom,
+                  ],
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.primaryDark.withValues(alpha: 0.18),
+                    blurRadius: 26,
+                    offset: const Offset(0, 14),
+                  ),
+                ],
+              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -59,20 +80,24 @@ class HomeScreen extends ConsumerWidget {
                           tone: StatusChipTone.info,
                         ),
                       ),
-                      StatusChip(label: strings.online, tone: StatusChipTone.dark),
+                      StatusChip(label: strings.online, tone: StatusChipTone.warning),
                     ],
                   ),
                   const SizedBox(height: AppSpacing.md),
                   Text(
                     session?.nickname ?? 'Entrenador',
-                    style: theme.textTheme.headlineMedium,
+                    style: theme.textTheme.headlineMedium?.copyWith(
+                      color: Colors.white,
+                    ),
                   ),
                   const SizedBox(height: AppSpacing.xs),
                   Text(
                     session?.hasActiveBattle == true
                         ? strings.activeArena
                         : strings.readyToPlay,
-                    style: theme.textTheme.bodyLarge,
+                    style: theme.textTheme.bodyLarge?.copyWith(
+                      color: Colors.white70,
+                    ),
                   ),
                 ],
               ),

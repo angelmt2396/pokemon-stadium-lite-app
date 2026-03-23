@@ -45,30 +45,106 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               child: LanguageToggle(),
             ),
             const SizedBox(height: AppSpacing.sm),
-            Text(
-              strings.welcome,
-              style: theme.textTheme.labelLarge?.copyWith(
-                fontWeight: FontWeight.w800,
-                letterSpacing: 4,
+            TweenAnimationBuilder<double>(
+              tween: Tween(begin: 0.94, end: 1),
+              duration: const Duration(milliseconds: 500),
+              curve: Curves.easeOutCubic,
+              builder: (context, value, child) {
+                return Transform.scale(
+                  scale: value,
+                  child: Opacity(
+                    opacity: ((value - 0.94) / 0.06).clamp(0, 1),
+                    child: child,
+                  ),
+                );
+              },
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(AppSpacing.lg),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(28),
+                  gradient: const LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      AppColors.primaryDark,
+                      AppColors.gameNavyBottom,
+                    ],
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.primaryDark.withValues(alpha: 0.22),
+                      blurRadius: 28,
+                      offset: const Offset(0, 16),
+                    ),
+                  ],
+                ),
+                child: Stack(
+                  children: [
+                    Positioned(
+                      top: -22,
+                      right: -18,
+                      child: Container(
+                        width: 108,
+                        height: 108,
+                        decoration: const BoxDecoration(
+                          color: AppColors.haloBlue,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                    ),
+                    Positioned(
+                      bottom: -28,
+                      left: -8,
+                      child: Container(
+                        width: 124,
+                        height: 124,
+                        decoration: const BoxDecoration(
+                          color: AppColors.haloAmber,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                    ),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          strings.welcome,
+                          style: theme.textTheme.labelLarge?.copyWith(
+                            color: Colors.white70,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 4,
+                          ),
+                        ),
+                        const SizedBox(height: AppSpacing.md),
+                        Text(
+                          strings.appTitle,
+                          style: theme.textTheme.headlineLarge?.copyWith(
+                            fontSize: 56,
+                            color: Colors.white,
+                          ),
+                        ),
+                        const SizedBox(height: AppSpacing.sm),
+                        Text(
+                          strings.loginSubtitle,
+                          style: theme.textTheme.bodyLarge?.copyWith(
+                            fontSize: 20,
+                            color: Colors.white70,
+                          ),
+                        ),
+                        const SizedBox(height: AppSpacing.lg),
+                        Row(
+                          children: [
+                            StatusChip(label: strings.online, tone: StatusChipTone.info),
+                            const SizedBox(width: AppSpacing.sm),
+                            StatusChip(label: strings.pvp, tone: StatusChipTone.warning),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
-            ),
-            const SizedBox(height: AppSpacing.md),
-            Text(
-              strings.appTitle,
-              style: theme.textTheme.headlineLarge?.copyWith(fontSize: 56),
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            Text(
-              strings.loginSubtitle,
-              style: theme.textTheme.bodyLarge?.copyWith(fontSize: 20),
-            ),
-            const SizedBox(height: AppSpacing.lg),
-            Row(
-              children: [
-                StatusChip(label: strings.online, tone: StatusChipTone.info),
-                const SizedBox(width: AppSpacing.sm),
-                StatusChip(label: strings.pvp, tone: StatusChipTone.warning),
-              ],
             ),
             const SizedBox(height: AppSpacing.xl),
             GameCard(

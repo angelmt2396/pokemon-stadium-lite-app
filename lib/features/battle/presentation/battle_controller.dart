@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pokemon_stadium_lite_app/core/i18n/app_strings.dart';
 import 'package:pokemon_stadium_lite_app/core/socket/socket_client.dart';
@@ -20,6 +21,10 @@ class BattleController extends AutoDisposeNotifier<BattleFlowState> {
   String? _bootstrapKey;
   Timer? _searchTicker;
   bool _didRegisterSessionListener = false;
+  String? _autoAssignLobbyId;
+  String? _autoReadyLobbyId;
+  bool _autoAssignInFlight = false;
+  bool _autoReadyInFlight = false;
 
   AppStrings get _strings => ref.read(appStringsProvider);
 
@@ -79,6 +84,12 @@ class BattleController extends AutoDisposeNotifier<BattleFlowState> {
       final client = await _prepareClient(session);
       final ack = await client.searchMatch();
       final stage = _deriveStage(ack.lobbyStatus);
+      _trace(
+        'search_match_ack',
+        lobbyId: ack.lobbyId,
+        playerStatus: ack.status,
+        stage: stage.name,
+      );
 
       _setSearchTicker(stage == BattleStage.searching);
 
@@ -100,6 +111,7 @@ class BattleController extends AutoDisposeNotifier<BattleFlowState> {
             ? _strings.searchRival
             : _strings.battleSearchingInfo,
       );
+      _scheduleLobbyAutomation();
     } catch (error) {
       state = state.copyWith(
         actionPending: false,
@@ -128,6 +140,7 @@ class BattleController extends AutoDisposeNotifier<BattleFlowState> {
             playerStatus: 'idle',
             clearCurrentLobbyId: true,
             clearCurrentBattleId: true,
+            clearReconnectToken: true,
           );
 
       state = state.copyWith(
@@ -143,6 +156,7 @@ class BattleController extends AutoDisposeNotifier<BattleFlowState> {
             ? _strings.cancelSearch
             : _strings.battleSearchCancelledInfo,
       );
+      _trace('cancel_search_ack', lobbyId: ack.lobbyId, canceled: ack.canceled);
     } catch (error) {
       state = state.copyWith(
         actionPending: false,
@@ -195,6 +209,7 @@ class BattleController extends AutoDisposeNotifier<BattleFlowState> {
           playerStatus: 'idle',
           clearCurrentLobbyId: true,
           clearCurrentBattleId: true,
+          clearReconnectToken: true,
         );
 
     state = state.copyWith(
@@ -204,7 +219,7 @@ class BattleController extends AutoDisposeNotifier<BattleFlowState> {
       clearLatestTurnResult: true,
       clearBattleResult: true,
       clearSearchStartedAt: true,
-        infoMessage: _strings.battleReadyForNewSearch,
+      infoMessage: _strings.battleReadyForNewSearch,
     );
   }
 
@@ -224,6 +239,7 @@ class BattleController extends AutoDisposeNotifier<BattleFlowState> {
     try {
       final client = await _prepareClient(session);
       final ack = await client.assignPokemon(lobbyId);
+      _trace('assign_pokemon_ack', lobbyId: ack.lobbyId, playerId: ack.playerId);
 
       state = state.copyWith(
         actionPending: false,
@@ -232,11 +248,13 @@ class BattleController extends AutoDisposeNotifier<BattleFlowState> {
         clearErrorMessage: true,
         infoMessage: _strings.teamAssignedInfo,
       );
+      _scheduleLobbyAutomation();
     } catch (error) {
       state = state.copyWith(
         actionPending: false,
         errorMessage: _normalizeError(error),
       );
+      _autoAssignInFlight = false;
     }
   }
 
@@ -262,6 +280,7 @@ class BattleController extends AutoDisposeNotifier<BattleFlowState> {
         actionPending: false,
         errorMessage: _normalizeError(error),
       );
+      _autoReadyInFlight = false;
     }
   }
 
@@ -290,6 +309,7 @@ class BattleController extends AutoDisposeNotifier<BattleFlowState> {
         final ack = await client.reconnectPlayer(session.reconnectToken!);
         final battleState = ack.battleState;
         final stage = battleState != null ? BattleStage.battling : _deriveStage(ack.lobbyStatus);
+        _trace('reconnect_ack', lobbyId: ack.lobbyId, battleId: battleState?.battleId, stage: stage.name);
         _setSearchTicker(stage == BattleStage.searching);
 
         await ref.read(sessionControllerProvider.notifier).updateRuntimeSession(
@@ -318,6 +338,7 @@ class BattleController extends AutoDisposeNotifier<BattleFlowState> {
                       ? _strings.battleRecoveredPaused
                       : _strings.battleRecoveredActive,
         );
+        _scheduleLobbyAutomation();
       } catch (error) {
         state = state.copyWith(
           stage: BattleStage.idle,
@@ -359,18 +380,27 @@ class BattleController extends AutoDisposeNotifier<BattleFlowState> {
   void _bindClient(BattleSocketClient client, String currentPlayerId) {
     client.bind(
       onConnected: () {
+        _trace('socket_connected');
         state = state.copyWith(connectionStatus: BattleConnectionStatus.connected);
       },
       onDisconnected: () {
+        _trace('socket_disconnected');
         state = state.copyWith(connectionStatus: BattleConnectionStatus.disconnected);
       },
       onConnectError: (message) {
+        _trace('socket_connect_error', message: message);
         state = state.copyWith(
           connectionStatus: BattleConnectionStatus.disconnected,
           errorMessage: message,
         );
       },
       onSearchStatus: (event) {
+        _trace(
+          'search_status',
+          lobbyId: event.lobbyId,
+          playerStatus: event.status,
+          canceled: event.canceled,
+        );
         if (event.status == 'searching') {
           _setSearchTicker(true);
           state = state.copyWith(
@@ -398,9 +428,18 @@ class BattleController extends AutoDisposeNotifier<BattleFlowState> {
               ? _strings.cancelSearch
               : _strings.battleArenaFreed,
         );
+        unawaited(
+          ref.read(sessionControllerProvider.notifier).updateRuntimeSession(
+                playerStatus: 'idle',
+                clearCurrentLobbyId: true,
+                clearCurrentBattleId: true,
+                clearReconnectToken: true,
+              ),
+        );
       },
       onLobbyStatus: (status) {
         final stage = _deriveStage(status);
+        _trace('lobby_status', lobbyId: status.lobbyId, playerStatus: status.status, stage: stage.name);
         _setSearchTicker(stage == BattleStage.searching);
         state = state.copyWith(
           stage: stage,
@@ -422,8 +461,10 @@ class BattleController extends AutoDisposeNotifier<BattleFlowState> {
                 clearCurrentBattleId: true,
               ),
         );
+        _scheduleLobbyAutomation();
       },
       onMatchFound: (status) {
+        _trace('match_found', lobbyId: status.lobbyId, stage: BattleStage.matched.name);
         _setSearchTicker(false);
         state = state.copyWith(
           stage: BattleStage.matched,
@@ -442,6 +483,7 @@ class BattleController extends AutoDisposeNotifier<BattleFlowState> {
                 clearCurrentBattleId: true,
               ),
         );
+        _scheduleLobbyAutomation();
       },
       onBattleStart: (battleState) {
         _setSearchTicker(false);
@@ -463,6 +505,8 @@ class BattleController extends AutoDisposeNotifier<BattleFlowState> {
   }
 
   Future<void> _applyReadyAck(ReadyAck ack) async {
+    _trace('ready_ack', lobbyId: ack.lobbyId, playerId: ack.playerId, ready: ack.ready);
+    _autoReadyInFlight = false;
     if (ack.battleStart != null) {
       await _applyBattleStart(ack.battleStart!);
       return;
@@ -477,14 +521,18 @@ class BattleController extends AutoDisposeNotifier<BattleFlowState> {
       clearErrorMessage: true,
       infoMessage: _strings.waitingRival,
     );
+    _scheduleLobbyAutomation();
   }
 
   Future<void> _applyBattleStart(BattleStateSnapshot battleState) async {
+    _autoAssignInFlight = false;
+    _autoReadyInFlight = false;
     await ref.read(sessionControllerProvider.notifier).updateRuntimeSession(
           playerStatus: 'battling',
           currentLobbyId: battleState.lobbyId,
           currentBattleId: battleState.battleId,
         );
+    _trace('battle_start', lobbyId: battleState.lobbyId, battleId: battleState.battleId);
 
     state = state.copyWith(
       actionPending: false,
@@ -509,6 +557,12 @@ class BattleController extends AutoDisposeNotifier<BattleFlowState> {
         );
 
     final isSelfDisconnected = battleState.disconnectedPlayerId == currentPlayerId;
+    _trace(
+      'battle_pause',
+      lobbyId: battleState.lobbyId,
+      battleId: battleState.battleId,
+      disconnectedPlayerId: battleState.disconnectedPlayerId,
+    );
     state = state.copyWith(
       actionPending: false,
       stage: BattleStage.battling,
@@ -529,6 +583,7 @@ class BattleController extends AutoDisposeNotifier<BattleFlowState> {
           currentBattleId: battleState.battleId,
         );
 
+    _trace('battle_resume', lobbyId: battleState.lobbyId, battleId: battleState.battleId);
     state = state.copyWith(
       actionPending: false,
       stage: BattleStage.battling,
@@ -545,6 +600,13 @@ class BattleController extends AutoDisposeNotifier<BattleFlowState> {
   }
 
   void _applyTurnResult(TurnResultSnapshot result) {
+    _trace(
+      'turn_result',
+      battleId: result.battleId,
+      attackerPlayerId: result.attackerPlayerId,
+      defenderPlayerId: result.defenderPlayerId,
+      damage: result.damage,
+    );
     final currentBattleState = state.battleState;
     if (currentBattleState == null) {
       state = state.copyWith(latestTurnResult: result);
@@ -576,7 +638,15 @@ class BattleController extends AutoDisposeNotifier<BattleFlowState> {
           playerStatus: 'idle',
           clearCurrentLobbyId: true,
           clearCurrentBattleId: true,
+          clearReconnectToken: true,
         );
+    _trace(
+      'battle_end',
+      lobbyId: result.lobbyId,
+      battleId: result.battleId,
+      winnerPlayerId: result.winnerPlayerId,
+      reason: result.reason,
+    );
 
     state = state.copyWith(
       actionPending: false,
@@ -665,6 +735,100 @@ class BattleController extends AutoDisposeNotifier<BattleFlowState> {
 
   String _normalizeError(Object error) {
     return error.toString().replaceFirst('Exception: ', '');
+  }
+
+  void _scheduleLobbyAutomation() {
+    Future<void>.microtask(_maybeAutomateLobby);
+  }
+
+  Future<void> _maybeAutomateLobby() async {
+    final session = ref.read(sessionControllerProvider).session;
+    final lobbyStatus = state.lobbyStatus;
+    if (session == null ||
+        lobbyStatus == null ||
+        state.stage != BattleStage.matched ||
+        state.battleState != null ||
+        state.actionPending ||
+        lobbyStatus.players.length != 2) {
+      return;
+    }
+
+    final localPlayer = lobbyStatus.findPlayer(session.playerId);
+    if (localPlayer == null) {
+      return;
+    }
+
+    final assignCoordinatorId = [...lobbyStatus.players]
+      ..sort((left, right) => left.playerId.compareTo(right.playerId));
+
+    if (localPlayer.team.isEmpty &&
+        !localPlayer.ready &&
+        assignCoordinatorId.first.playerId == session.playerId &&
+        _autoAssignLobbyId != lobbyStatus.lobbyId &&
+        !_autoAssignInFlight) {
+      _autoAssignLobbyId = lobbyStatus.lobbyId;
+      _autoAssignInFlight = true;
+      _trace('auto_assign_start', lobbyId: lobbyStatus.lobbyId);
+      await assignTeam();
+      _autoAssignInFlight = false;
+      return;
+    }
+
+    if (localPlayer.team.length == 3 &&
+        !localPlayer.ready &&
+        _autoReadyLobbyId != lobbyStatus.lobbyId &&
+        !_autoReadyInFlight) {
+      _autoReadyLobbyId = lobbyStatus.lobbyId;
+      _autoReadyInFlight = true;
+      _trace('auto_ready_start', lobbyId: lobbyStatus.lobbyId);
+      await markReady();
+      _autoReadyInFlight = false;
+    }
+  }
+
+  void _trace(
+    String label, {
+    String? lobbyId,
+    String? battleId,
+    String? playerStatus,
+    String? stage,
+    String? playerId,
+    String? attackerPlayerId,
+    String? defenderPlayerId,
+    String? disconnectedPlayerId,
+    String? winnerPlayerId,
+    String? reason,
+    String? message,
+    bool? canceled,
+    bool? ready,
+    int? damage,
+  }) {
+    if (!kDebugMode) {
+      return;
+    }
+
+    final payload = <String, Object?>{
+      'label': label,
+      'stage': stage ?? state.stage.name,
+      'connection': state.connectionStatus.name,
+      'sessionLobbyId': ref.read(sessionControllerProvider).session?.currentLobbyId,
+      'sessionBattleId': ref.read(sessionControllerProvider).session?.currentBattleId,
+      'lobbyId': lobbyId,
+      'battleId': battleId,
+      'playerStatus': playerStatus,
+      'playerId': playerId,
+      'attackerPlayerId': attackerPlayerId,
+      'defenderPlayerId': defenderPlayerId,
+      'disconnectedPlayerId': disconnectedPlayerId,
+      'winnerPlayerId': winnerPlayerId,
+      'reason': reason,
+      'message': message,
+      'canceled': canceled,
+      'ready': ready,
+      'damage': damage,
+    }..removeWhere((key, value) => value == null);
+
+    debugPrint('[battle] $payload');
   }
 
   void _setSearchTicker(bool enabled) {
