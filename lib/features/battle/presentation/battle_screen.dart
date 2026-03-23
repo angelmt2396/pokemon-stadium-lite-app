@@ -75,12 +75,29 @@ class _BattleScreenState extends ConsumerState<BattleScreen> {
   _BattleCinematic? _activeCinematic;
   _ImpactCue? _impactCue;
   _ArenaTarget? _turnPulseTarget;
+  ProviderSubscription<BattleUiState>? _uiStateSubscription;
   Timer? _cinematicTimer;
   Timer? _impactCueTimer;
   Timer? _turnPulseTimer;
 
   @override
+  void initState() {
+    super.initState();
+    _uiStateSubscription = ref.listenManual<BattleUiState>(
+      battleUiStateProvider,
+      (previous, next) {
+        if (!mounted) {
+          return;
+        }
+
+        _handleUiTransition(previous, next, ref.read(appStringsProvider));
+      },
+    );
+  }
+
+  @override
   void dispose() {
+    _uiStateSubscription?.close();
     _cinematicTimer?.cancel();
     _impactCueTimer?.cancel();
     _turnPulseTimer?.cancel();
@@ -89,10 +106,6 @@ class _BattleScreenState extends ConsumerState<BattleScreen> {
 
   @override
   Widget build(BuildContext context) {
-    ref.listen<BattleUiState>(battleUiStateProvider, (previous, next) {
-      _handleUiTransition(previous, next, ref.read(appStringsProvider));
-    });
-
     final theme = Theme.of(context);
     final strings = ref.watch(appStringsProvider);
     final uiState = ref.watch(battleUiStateProvider);

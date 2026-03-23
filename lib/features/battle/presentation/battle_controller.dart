@@ -37,9 +37,7 @@ class BattleController extends AutoDisposeNotifier<BattleFlowState> {
 
       ref.listen<SessionState>(sessionControllerProvider, (previous, next) {
         final session = next.session;
-        final nextBootstrapKey = session == null
-            ? null
-            : '${session.sessionToken}:${session.currentLobbyId}:${session.currentBattleId}:${session.reconnectToken}';
+        final nextBootstrapKey = session?.sessionToken;
 
         if (_bootstrapKey != nextBootstrapKey) {
           _bootstrapKey = nextBootstrapKey;
@@ -48,9 +46,7 @@ class BattleController extends AutoDisposeNotifier<BattleFlowState> {
       });
 
       final initialSession = ref.read(sessionControllerProvider).session;
-      final initialBootstrapKey = initialSession == null
-          ? null
-          : '${initialSession.sessionToken}:${initialSession.currentLobbyId}:${initialSession.currentBattleId}:${initialSession.reconnectToken}';
+      final initialBootstrapKey = initialSession?.sessionToken;
       _bootstrapKey = initialBootstrapKey;
       Future<void>.microtask(() => _bootstrap(initialSession));
     }
@@ -292,6 +288,23 @@ class BattleController extends AutoDisposeNotifier<BattleFlowState> {
       _client = null;
       _sessionToken = null;
       state = const BattleFlowState.initial();
+      return;
+    }
+
+    final alreadyHydratedBattle = session.currentBattleId != null &&
+        state.battleState?.battleId == session.currentBattleId &&
+        state.stage == BattleStage.battling;
+    final alreadyHydratedLobby = session.currentLobbyId != null &&
+        state.lobbyStatus?.lobbyId == session.currentLobbyId &&
+        state.stage != BattleStage.idle &&
+        state.stage != BattleStage.reconnecting;
+
+    if (alreadyHydratedBattle || alreadyHydratedLobby) {
+      _trace(
+        'bootstrap_skipped',
+        lobbyId: session.currentLobbyId,
+        battleId: session.currentBattleId,
+      );
       return;
     }
 

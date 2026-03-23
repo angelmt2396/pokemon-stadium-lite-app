@@ -32,7 +32,12 @@ void main() {
       ),
     );
 
-    await tester.pumpAndSettle();
+    for (var index = 0; index < 20; index++) {
+      await tester.pump(const Duration(milliseconds: 100));
+      if (find.text('Entrar al juego').evaluate().isNotEmpty) {
+        break;
+      }
+    }
 
     expect(find.text('PokeAlbo'), findsOneWidget);
     expect(find.text('Entrar al juego'), findsOneWidget);
