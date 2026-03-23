@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:pokemon_stadium_lite_app/core/i18n/app_strings.dart';
 import 'package:pokemon_stadium_lite_app/features/session/data/session_repository.dart';
 import 'package:pokemon_stadium_lite_app/features/session/domain/session_state.dart';
 
@@ -31,9 +32,10 @@ class SessionController extends Notifier<SessionState> {
 
   Future<void> login(String nickname) async {
     final trimmed = nickname.trim();
+    final strings = ref.read(appStringsProvider);
     if (trimmed.isEmpty) {
-      state = const SessionState.unauthenticated(
-        errorMessage: 'Ingresa un nickname para continuar.',
+      state = SessionState.unauthenticated(
+        errorMessage: strings.nicknameRequired,
       );
       return;
     }
@@ -45,13 +47,16 @@ class SessionController extends Notifier<SessionState> {
       state = SessionState.authenticated(session);
     } catch (error) {
       state = SessionState.unauthenticated(
-        errorMessage: error is Exception ? error.toString().replaceFirst('Exception: ', '') : 'No se pudo iniciar sesión.',
+        errorMessage: error is Exception
+            ? error.toString().replaceFirst('Exception: ', '')
+            : strings.loginFailed,
       );
     }
   }
 
   Future<void> logout() async {
     final session = state.session;
+    final strings = ref.read(appStringsProvider);
     if (session == null) {
       state = const SessionState.unauthenticated();
       return;
@@ -62,7 +67,9 @@ class SessionController extends Notifier<SessionState> {
       state = const SessionState.unauthenticated();
     } catch (error) {
       state = state.copyWith(
-        errorMessage: error is Exception ? error.toString().replaceFirst('Exception: ', '') : 'No se pudo cerrar sesión.',
+        errorMessage: error is Exception
+            ? error.toString().replaceFirst('Exception: ', '')
+            : strings.logoutFailed,
       );
     }
   }

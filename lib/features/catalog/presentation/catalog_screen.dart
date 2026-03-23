@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:pokemon_stadium_lite_app/core/i18n/app_strings.dart';
 import 'package:pokemon_stadium_lite_app/core/theme/app_colors.dart';
 import 'package:pokemon_stadium_lite_app/core/theme/app_spacing.dart';
 import 'package:pokemon_stadium_lite_app/core/widgets/app_scaffold.dart';
@@ -17,12 +18,14 @@ class CatalogScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
+    final strings = ref.watch(appStringsProvider);
     final catalog = ref.watch(pokemonCatalogProvider);
     final selectedPokemonId = ref.watch(effectiveSelectedPokemonIdProvider);
     final selectedPokemonDetail = ref.watch(selectedPokemonDetailProvider);
 
     return AppScaffold(
       child: SingleChildScrollView(
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
         padding: const EdgeInsets.all(AppSpacing.lg),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -34,15 +37,18 @@ class CatalogScreen extends ConsumerWidget {
             const SizedBox(height: AppSpacing.sm),
             const StatusChip(label: 'CATÁLOGO', tone: StatusChipTone.info),
             const SizedBox(height: AppSpacing.md),
-            Text('Pokédex', style: theme.textTheme.headlineMedium),
+            Text(strings.catalogTitle, style: theme.textTheme.headlineMedium),
             const SizedBox(height: AppSpacing.sm),
             Text(
-              'Explora el catálogo real del backend y revisa stats, tipos y sprites antes de entrar a combate.',
+              strings.catalogSubtitle,
               style: theme.textTheme.bodyLarge,
             ),
             const SizedBox(height: AppSpacing.lg),
             GameCard(
-              child: _CatalogDetailPanel(detail: selectedPokemonDetail),
+              child: _CatalogDetailPanel(
+                detail: selectedPokemonDetail,
+                strings: strings,
+              ),
             ),
             const SizedBox(height: AppSpacing.lg),
             GameCard(
@@ -50,9 +56,11 @@ class CatalogScreen extends ConsumerWidget {
                 data: (pokemon) => _CatalogList(
                   pokemon: pokemon,
                   selectedPokemonId: selectedPokemonId,
+                  strings: strings,
                 ),
-                loading: () => const _CatalogPlaceholder(),
+                loading: () => _CatalogPlaceholder(strings: strings),
                 error: (error, _) => _CatalogErrorState(
+                  strings: strings,
                   message: error.toString().replaceFirst('Exception: ', ''),
                   onRetry: () {
                     ref.invalidate(pokemonCatalogProvider);
@@ -69,9 +77,13 @@ class CatalogScreen extends ConsumerWidget {
 }
 
 class _CatalogDetailPanel extends StatelessWidget {
-  const _CatalogDetailPanel({required this.detail});
+  const _CatalogDetailPanel({
+    required this.detail,
+    required this.strings,
+  });
 
   final AsyncValue<PokemonDetail?> detail;
+  final AppStrings strings;
 
   @override
   Widget build(BuildContext context) {
@@ -80,7 +92,7 @@ class _CatalogDetailPanel extends StatelessWidget {
     return detail.when(
       data: (pokemon) {
         if (pokemon == null) {
-          return const _CatalogPlaceholder();
+          return _CatalogEmptyDetail(strings: strings);
         }
 
         return Column(
@@ -137,11 +149,11 @@ class _CatalogDetailPanel extends StatelessWidget {
           ],
         );
       },
-      loading: () => const _CatalogPlaceholder(),
+      loading: () => _CatalogPlaceholder(strings: strings),
       error: (error, _) => Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('No se pudo cargar el detalle.', style: theme.textTheme.titleLarge),
+          Text(strings.noDetail, style: theme.textTheme.titleLarge),
           const SizedBox(height: AppSpacing.sm),
           Text(
             error.toString().replaceFirst('Exception: ', ''),
@@ -157,23 +169,25 @@ class _CatalogList extends ConsumerWidget {
   const _CatalogList({
     required this.pokemon,
     required this.selectedPokemonId,
+    required this.strings,
   });
 
   final List<PokemonListItem> pokemon;
   final int? selectedPokemonId;
+  final AppStrings strings;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
 
     if (pokemon.isEmpty) {
-      return const Text('El catálogo llegó vacío.');
+      return _CatalogEmptyState(strings: strings);
     }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Roster disponible', style: theme.textTheme.titleLarge),
+        Text(strings.availableRoster, style: theme.textTheme.titleLarge),
         const SizedBox(height: AppSpacing.md),
         ...pokemon.map(
           (entry) => Padding(
@@ -230,56 +244,69 @@ class _CatalogList extends ConsumerWidget {
 }
 
 class _CatalogPlaceholder extends StatelessWidget {
-  const _CatalogPlaceholder();
+  const _CatalogPlaceholder({
+    required this.strings,
+  });
+
+  final AppStrings strings;
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return Column(
-      children: List.generate(
-        3,
-        (index) => Container(
-          margin: EdgeInsets.only(bottom: index == 2 ? 0 : AppSpacing.md),
-          padding: const EdgeInsets.all(AppSpacing.md),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: const Color(0x140F172A)),
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 56,
-                height: 56,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF8FAFC),
-                  borderRadius: BorderRadius.circular(16),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(strings.loadingCatalog, style: theme.textTheme.titleLarge),
+        const SizedBox(height: AppSpacing.md),
+        ...List.generate(
+          3,
+          (index) => Container(
+            margin: EdgeInsets.only(bottom: index == 2 ? 0 : AppSpacing.md),
+            padding: const EdgeInsets.all(AppSpacing.md),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: const Color(0x140F172A)),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 56,
+                  height: 56,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF8FAFC),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
                 ),
-              ),
-              const SizedBox(width: AppSpacing.md),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Container(height: 14, width: 120, color: const Color(0xFFE2E8F0)),
-                    const SizedBox(height: 8),
-                    Container(height: 12, width: 86, color: const Color(0xFFF1F5F9)),
-                  ],
+                const SizedBox(width: AppSpacing.md),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(height: 14, width: 120, color: const Color(0xFFE2E8F0)),
+                      const SizedBox(height: 8),
+                      Container(height: 12, width: 86, color: const Color(0xFFF1F5F9)),
+                    ],
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
-      ),
+      ],
     );
   }
 }
 
 class _CatalogErrorState extends StatelessWidget {
   const _CatalogErrorState({
+    required this.strings,
     required this.message,
     required this.onRetry,
   });
 
+  final AppStrings strings;
   final String message;
   final VoidCallback onRetry;
 
@@ -290,12 +317,80 @@ class _CatalogErrorState extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('No se pudo cargar el catálogo.', style: theme.textTheme.titleLarge),
+        Text(strings.catalogErrorTitle, style: theme.textTheme.titleLarge),
         const SizedBox(height: AppSpacing.sm),
         Text(message, style: theme.textTheme.bodyLarge),
         const SizedBox(height: AppSpacing.lg),
-        PrimaryButton(label: 'Intentar de nuevo', onPressed: onRetry),
+        PrimaryButton(label: strings.retry, onPressed: onRetry),
       ],
+    );
+  }
+}
+
+class _CatalogEmptyState extends StatelessWidget {
+  const _CatalogEmptyState({
+    required this.strings,
+  });
+
+  final AppStrings strings;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceAlt,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        children: [
+          const Icon(
+            Icons.catching_pokemon_rounded,
+            size: 52,
+            color: AppColors.subtleInk,
+          ),
+          const SizedBox(height: AppSpacing.md),
+          Text(strings.catalogEmpty, style: theme.textTheme.titleLarge),
+        ],
+      ),
+    );
+  }
+}
+
+class _CatalogEmptyDetail extends StatelessWidget {
+  const _CatalogEmptyDetail({
+    required this.strings,
+  });
+
+  final AppStrings strings;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceAlt,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(strings.noDetail, style: theme.textTheme.titleLarge),
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            strings.catalogSubtitle,
+            style: theme.textTheme.bodyLarge,
+          ),
+        ],
+      ),
     );
   }
 }

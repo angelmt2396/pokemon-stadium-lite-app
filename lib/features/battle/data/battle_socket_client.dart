@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:pokemon_stadium_lite_app/core/i18n/app_strings.dart';
 import 'package:pokemon_stadium_lite_app/core/socket/socket_client.dart';
 import 'package:pokemon_stadium_lite_app/core/socket/socket_events.dart';
 import 'package:pokemon_stadium_lite_app/features/battle/domain/battle_end_snapshot.dart';
@@ -191,9 +192,12 @@ class BattleSocketClient {
   BattleSocketClient({
     required String sessionToken,
     required SocketFactory socketFactory,
-  }) : _socket = socketFactory(sessionToken);
+    required AppStrings strings,
+  }) : _socket = socketFactory(sessionToken),
+       _strings = strings;
 
   final io.Socket _socket;
+  final AppStrings _strings;
 
   void bind({
     SimpleSocketStateHandler? onConnected,
@@ -223,7 +227,7 @@ class BattleSocketClient {
     _socket.on('connect', (_) => onConnected?.call());
     _socket.on('disconnect', (_) => onDisconnected?.call());
     _socket.on('connect_error', (error) {
-      onConnectError?.call(error?.toString() ?? 'No se pudo conectar al socket.');
+      onConnectError?.call(error?.toString() ?? _strings.socketConnectFailed);
     });
     _socket.on(SocketEvents.serverSearchStatus, (payload) {
       onSearchStatus?.call(SearchStatusEvent.fromJson(_mapOf(payload)));
@@ -287,7 +291,7 @@ class BattleSocketClient {
       cleanup();
       if (!completer.isCompleted) {
         completer.completeError(
-          Exception(error?.toString() ?? 'No se pudo conectar al socket.'),
+          Exception(error?.toString() ?? _strings.socketConnectFailed),
         );
       }
     };
@@ -300,7 +304,7 @@ class BattleSocketClient {
       const Duration(seconds: 5),
       onTimeout: () {
         cleanup();
-        throw Exception('Timeout conectando al socket.');
+        throw Exception(_strings.socketConnectTimeout);
       },
     );
   }
@@ -366,19 +370,19 @@ class BattleSocketClient {
 
     return completer.future.timeout(
       const Duration(seconds: 5),
-      onTimeout: () => throw Exception('Timeout esperando respuesta del socket.'),
+      onTimeout: () => throw Exception(_strings.socketAckTimeout),
     );
   }
 
   Map<String, dynamic> _unwrapAckData(Map<String, dynamic> response) {
     final ok = response['ok'] as bool? ?? false;
     if (!ok) {
-      throw Exception(response['message'] as String? ?? 'Ocurrió un error en socket.');
+      throw Exception(response['message'] as String? ?? _strings.socketGenericError);
     }
 
     final data = response['data'];
     if (data is! Map) {
-      throw Exception('El backend devolvió un ack inválido.');
+      throw Exception(_strings.socketInvalidAck);
     }
 
     return Map<String, dynamic>.from(data);
@@ -401,6 +405,7 @@ final battleSocketClientProvider = Provider.family<BattleSocketClient, String>((
   final client = BattleSocketClient(
     sessionToken: sessionToken,
     socketFactory: ref.watch(socketFactoryProvider),
+    strings: ref.watch(appStringsProvider),
   );
 
   ref.onDispose(client.dispose);

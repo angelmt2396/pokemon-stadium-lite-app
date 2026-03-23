@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:pokemon_stadium_lite_app/features/battle/presentation/battle_screen.dart';
 import 'package:pokemon_stadium_lite_app/features/catalog/presentation/catalog_screen.dart';
+import 'package:pokemon_stadium_lite_app/features/health/presentation/health_screen.dart';
 import 'package:pokemon_stadium_lite_app/features/home/presentation/home_screen.dart';
 import 'package:pokemon_stadium_lite_app/features/session/presentation/bootstrap_screen.dart';
 import 'package:pokemon_stadium_lite_app/features/session/presentation/login_screen.dart';
@@ -63,6 +64,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/catalog',
         builder: (context, state) => const CatalogScreen(),
+      ),
+      GoRoute(
+        path: '/health',
+        builder: (context, state) => const HealthScreen(),
       ),
       GoRoute(
         path: '/battle',

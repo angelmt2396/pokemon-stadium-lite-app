@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:pokemon_stadium_lite_app/core/i18n/app_strings.dart';
 import 'package:pokemon_stadium_lite_app/core/theme/app_colors.dart';
 import 'package:pokemon_stadium_lite_app/core/theme/app_radii.dart';
 import 'package:pokemon_stadium_lite_app/core/theme/app_spacing.dart';
@@ -28,6 +29,7 @@ class BattleScreen extends ConsumerWidget {
     final state = ref.watch(battleControllerProvider);
     final controller = ref.read(battleControllerProvider.notifier);
     final session = ref.watch(sessionControllerProvider).session;
+    final strings = ref.watch(appStringsProvider);
     final lobbyStatus = state.lobbyStatus;
     final battleState = state.battleState;
     final battleResult = state.battleResult;
@@ -65,6 +67,7 @@ class BattleScreen extends ConsumerWidget {
 
     return AppScaffold(
       child: SingleChildScrollView(
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
         padding: const EdgeInsets.all(AppSpacing.lg),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -78,12 +81,12 @@ class BattleScreen extends ConsumerWidget {
               spacing: AppSpacing.sm,
               runSpacing: AppSpacing.sm,
               children: [
-                const StatusChip(label: 'BATTLE', tone: StatusChipTone.warning),
+                StatusChip(label: strings.battleChip, tone: StatusChipTone.warning),
                 StatusChip(
                   label: switch (state.connectionStatus) {
-                    BattleConnectionStatus.connected => 'CONNECTED',
-                    BattleConnectionStatus.connecting => 'CONNECTING',
-                    BattleConnectionStatus.disconnected => 'OFFLINE',
+                    BattleConnectionStatus.connected => strings.connectedChip,
+                    BattleConnectionStatus.connecting => strings.connectingChip,
+                    BattleConnectionStatus.disconnected => strings.offlineChip,
                   },
                   tone: switch (state.connectionStatus) {
                     BattleConnectionStatus.connected => StatusChipTone.success,
@@ -92,31 +95,31 @@ class BattleScreen extends ConsumerWidget {
                   },
                 ),
                 if (state.stage == BattleStage.searching)
-                  const StatusChip(
-                    label: 'SEARCHING',
+                  StatusChip(
+                    label: strings.searchingChip,
                     tone: StatusChipTone.info,
                   ),
                 if (state.stage == BattleStage.matched)
-                  const StatusChip(
-                    label: 'MATCHED',
+                  StatusChip(
+                    label: strings.matchedChip,
                     tone: StatusChipTone.success,
                   ),
                 if (state.stage == BattleStage.battling)
-                  const StatusChip(
-                    label: 'BATTLE LIVE',
+                  StatusChip(
+                    label: strings.battleLiveChip,
                     tone: StatusChipTone.warning,
                   ),
                 if (state.stage == BattleStage.battling && isBattlePaused)
-                  const StatusChip(
-                    label: 'PAUSED',
+                  StatusChip(
+                    label: strings.pausedChip,
                     tone: StatusChipTone.dark,
                   ),
                 if (state.stage == BattleStage.result)
                   StatusChip(
                     label: battleResult != null &&
                             battleResult.winnerPlayerId == session?.playerId
-                        ? 'VICTORY'
-                        : 'DEFEAT',
+                        ? strings.victoryChip
+                        : strings.defeatChip,
                     tone: battleResult != null &&
                             battleResult.winnerPlayerId == session?.playerId
                         ? StatusChipTone.success
@@ -125,11 +128,15 @@ class BattleScreen extends ConsumerWidget {
               ],
             ),
             const SizedBox(height: AppSpacing.md),
-            Text(_titleForState(state), style: theme.textTheme.headlineMedium),
+            Text(
+              _titleForState(state, strings),
+              style: theme.textTheme.headlineMedium,
+            ),
             const SizedBox(height: AppSpacing.sm),
             Text(
               _subtitleForState(
                 state,
+                strings: strings,
                 opponentNickname: opponent?.nickname,
                 sessionPlayerId: session?.playerId,
                 battleResult: battleResult,
@@ -168,18 +175,18 @@ class BattleScreen extends ConsumerWidget {
                     children: [
                       Expanded(
                         child: Text(
-                          'Sala de combate',
+                          strings.battleRoom,
                           style: theme.textTheme.titleLarge,
                         ),
                       ),
                       StatusChip(
                         label: switch (state.stage) {
-                          BattleStage.idle => 'INACTIVE',
-                          BattleStage.reconnecting => 'RECONNECTING',
-                          BattleStage.searching => 'IN QUEUE',
-                          BattleStage.matched => 'RIVAL FOUND',
-                          BattleStage.battling => 'ACTIVE BATTLE',
-                          BattleStage.result => 'RESULT READY',
+                          BattleStage.idle => strings.inactiveChip,
+                          BattleStage.reconnecting => strings.reconnecting,
+                          BattleStage.searching => strings.inQueueChip,
+                          BattleStage.matched => strings.rivalFoundChip,
+                          BattleStage.battling => strings.activeBattleChip,
+                          BattleStage.result => strings.resultReadyChip,
                         },
                         tone: switch (state.stage) {
                           BattleStage.idle => StatusChipTone.dark,
@@ -195,7 +202,7 @@ class BattleScreen extends ConsumerWidget {
                   if (searchElapsed != null) ...[
                     const SizedBox(height: AppSpacing.md),
                     Text(
-                      'Tiempo en cola: ${_formatDuration(searchElapsed)}',
+                      '${strings.queueTimeLabel}: ${_formatDuration(searchElapsed)}',
                       style: theme.textTheme.bodyMedium,
                     ),
                   ],
@@ -209,12 +216,14 @@ class BattleScreen extends ConsumerWidget {
                       isSelfDisconnected: isSelfDisconnected,
                       reconnectDeadlineAt: battleState.reconnectDeadlineAt,
                       latestTurnResult: latestTurnResult,
+                      strings: strings,
                     )
                   else if (state.stage == BattleStage.result && battleResult != null)
                     _BattleResultPanel(
                       result: battleResult,
                       sessionPlayerId: session?.playerId,
                       onDismiss: controller.dismissBattleResult,
+                      strings: strings,
                     )
                   else
                     Container(
@@ -233,45 +242,45 @@ class BattleScreen extends ConsumerWidget {
                       child: Column(
                         children: [
                           _BattleFighterCard(
-                            label: 'Jugador local',
+                            label: strings.localPlayerLabel,
                             name: localPlayer?.nickname ??
                                 session?.nickname ??
-                                'Entrenador',
+                                strings.trainerFallback,
                             subtitle: localPlayer == null
-                                ? 'Tu sesión está lista para buscar rival.'
+                                ? strings.localSearchReadySubtitle
                                 : localPlayer.ready
-                                    ? 'Listo para el siguiente paso.'
+                                    ? strings.localReadySubtitle
                                     : localPlayer.team.isEmpty
-                                        ? 'Aún sin equipo asignado.'
-                                        : '${localPlayer.team.length} Pokémon asignados.',
+                                        ? strings.localNoTeamSubtitle
+                                        : strings.localAssignedTeamSubtitle(localPlayer.team.length),
                             chips: [
                               if (localPlayer?.ready == true)
-                                const StatusChip(
-                                  label: 'READY',
+                                StatusChip(
+                                  label: strings.readyChip,
                                   tone: StatusChipTone.success,
                                 ),
                             ],
                             team: localPlayer?.team ?? const [],
                           ),
-                          const Padding(
+                          Padding(
                             padding: EdgeInsets.symmetric(vertical: AppSpacing.md),
                             child: StatusChip(
-                              label: 'VS',
+                              label: strings.versusLabel,
                               tone: StatusChipTone.info,
                             ),
                           ),
                           _BattleFighterCard(
-                            label: 'Rival',
-                            name: opponent?.nickname ?? 'Esperando...',
+                            label: strings.rivalLabel,
+                            name: opponent?.nickname ?? strings.waitingPlaceholder,
                             subtitle: opponent == null
-                                ? 'La cola sigue abierta.'
+                                ? strings.queueOpenSubtitle
                                 : opponent.ready
-                                    ? 'Ya está listo.'
-                                    : 'Detectado en la sala.',
+                                    ? strings.rivalReadySubtitle
+                                    : strings.rivalDetectedSubtitle,
                             chips: [
                               if (opponent?.ready == true)
-                                const StatusChip(
-                                  label: 'READY',
+                                StatusChip(
+                                  label: strings.readyChip,
                                   tone: StatusChipTone.success,
                                 ),
                             ],
@@ -283,6 +292,7 @@ class BattleScreen extends ConsumerWidget {
                               localPlayer: localBattlePlayer,
                               opponentPlayer: opponentBattlePlayer,
                               isLocalTurn: isLocalTurn,
+                              strings: strings,
                             ),
                           ],
                         ],
@@ -307,12 +317,12 @@ class BattleScreen extends ConsumerWidget {
                   const SizedBox(height: AppSpacing.lg),
                   if (state.stage == BattleStage.idle)
                     PrimaryButton(
-                      label: 'Buscar rival',
+                      label: strings.searchRival,
                       onPressed: state.canSearch ? controller.searchMatch : null,
                     ),
                   if (state.stage == BattleStage.searching)
                     PrimaryButton(
-                      label: 'Cancelar búsqueda',
+                      label: strings.cancelSearch,
                       onPressed: state.canCancelSearch
                           ? controller.cancelSearch
                           : null,
@@ -322,17 +332,17 @@ class BattleScreen extends ConsumerWidget {
                       children: [
                         if (localCanAssignTeam)
                           PrimaryButton(
-                            label: 'Asignar equipo',
+                            label: strings.assignTeam,
                             onPressed: controller.assignTeam,
                           ),
                         if (localCanAssignTeam)
                           const SizedBox(height: AppSpacing.sm),
                         PrimaryButton(
                           label: localCanReady
-                              ? 'Marcar listo'
+                              ? strings.markReady
                               : localPlayer?.ready == true
-                                  ? 'Esperando rival'
-                                  : 'Necesitas equipo para continuar',
+                                  ? strings.waitingRival
+                                  : strings.needTeam,
                           onPressed: localCanReady ? controller.markReady : null,
                         ),
                       ],
@@ -340,21 +350,21 @@ class BattleScreen extends ConsumerWidget {
                   if (state.stage == BattleStage.battling)
                     PrimaryButton(
                       label: isBattlePaused
-                          ? 'Batalla en pausa'
+                          ? strings.battlePaused
                           : state.actionPending
-                          ? 'Atacando...'
+                          ? strings.attacking
                           : isLocalTurn
-                              ? 'Atacar'
-                              : 'Esperando turno',
+                              ? strings.attack
+                              : strings.waitingTurn,
                       onPressed: state.canAttack && isLocalTurn
                           ? controller.attack
                           : null,
                     ),
                   if (state.stage == BattleStage.reconnecting)
-                    const PrimaryButton(label: 'Reconectando sala...'),
+                    PrimaryButton(label: strings.reconnecting),
                   if (state.stage == BattleStage.result)
                     PrimaryButton(
-                      label: 'Cerrar resultado',
+                      label: strings.closeResult,
                       onPressed: battleResult == null
                           ? null
                           : controller.dismissBattleResult,
@@ -506,11 +516,13 @@ class _BattleStartPanel extends StatelessWidget {
     required this.localPlayer,
     required this.opponentPlayer,
     required this.isLocalTurn,
+    required this.strings,
   });
 
   final BattlePlayerSnapshot? localPlayer;
   final BattlePlayerSnapshot? opponentPlayer;
   final bool isLocalTurn;
+  final AppStrings strings;
 
   @override
   Widget build(BuildContext context) {
@@ -533,23 +545,23 @@ class _BattleStartPanel extends StatelessWidget {
             spacing: AppSpacing.sm,
             runSpacing: AppSpacing.sm,
             children: [
-              const StatusChip(label: 'BATTLE READY', tone: StatusChipTone.warning),
+              StatusChip(label: strings.battleReadyChip, tone: StatusChipTone.warning),
               StatusChip(
-                label: isLocalTurn ? 'YOUR TURN' : 'RIVAL TURN',
+                label: isLocalTurn ? strings.yourTurn : strings.rivalTurn,
                 tone: isLocalTurn ? StatusChipTone.success : StatusChipTone.dark,
               ),
             ],
           ),
           const SizedBox(height: AppSpacing.md),
           Text(
-            'El backend ya inició el combate.',
+            strings.battleStarted,
             style: theme.textTheme.titleMedium,
           ),
           const SizedBox(height: AppSpacing.sm),
           Text(
             localPokemon == null || opponentPokemon == null
-                ? 'Esperando a que se hidraten los Pokémon activos.'
-                : '${localPokemon.name} abre contra ${opponentPokemon.name}.',
+                ? strings.waitingActivePokemonHydration
+                : strings.battleOpening(localPokemon.name, opponentPokemon.name),
             style: theme.textTheme.bodyMedium,
           ),
         ],
@@ -567,6 +579,7 @@ class _ActiveBattleHud extends StatelessWidget {
     required this.isSelfDisconnected,
     required this.reconnectDeadlineAt,
     required this.latestTurnResult,
+    required this.strings,
   });
 
   final BattlePlayerSnapshot? localPlayer;
@@ -576,6 +589,7 @@ class _ActiveBattleHud extends StatelessWidget {
   final bool isSelfDisconnected;
   final DateTime? reconnectDeadlineAt;
   final TurnResultSnapshot? latestTurnResult;
+  final AppStrings strings;
 
   @override
   Widget build(BuildContext context) {
@@ -602,37 +616,47 @@ class _ActiveBattleHud extends StatelessWidget {
                 runSpacing: AppSpacing.sm,
                 children: [
                   StatusChip(
-                    label: isLocalTurn ? 'YOUR TURN' : 'RIVAL TURN',
+                    label: isLocalTurn ? strings.yourTurn : strings.rivalTurn,
                     tone: isLocalTurn ? StatusChipTone.success : StatusChipTone.dark,
                   ),
                   if (latestTurnResult != null)
-                    const StatusChip(
-                      label: 'TURN RESOLVED',
+                    StatusChip(
+                      label: strings.turnResolvedChip,
                       tone: StatusChipTone.warning,
                     ),
                   if (isPaused)
-                    const StatusChip(
-                      label: 'BATTLE PAUSED',
+                    StatusChip(
+                      label: strings.battlePausedChip,
                       tone: StatusChipTone.dark,
                     ),
                 ],
               ),
               const SizedBox(height: AppSpacing.md),
               _ActivePokemonPanel(
-                label: 'Rival',
+                label: strings.rivalLabel,
                 pokemon: opponentPlayer?.activePokemon,
                 alignEnd: true,
+                strings: strings,
+                damageContext: latestTurnResult?.defenderPokemonId ==
+                        opponentPlayer?.activePokemon.pokemonId
+                    ? latestTurnResult
+                    : null,
               ),
-              const Padding(
+              Padding(
                 padding: EdgeInsets.symmetric(vertical: AppSpacing.md),
                 child: Center(
-                  child: StatusChip(label: 'VS', tone: StatusChipTone.info),
+                  child: StatusChip(label: strings.versusLabel, tone: StatusChipTone.info),
                 ),
               ),
               _ActivePokemonPanel(
-                label: 'Tu Pokémon',
+                label: strings.yourPokemonLabel,
                 pokemon: localPlayer?.activePokemon,
                 alignEnd: false,
+                strings: strings,
+                damageContext:
+                    latestTurnResult?.defenderPokemonId == localPlayer?.activePokemon.pokemonId
+                        ? latestTurnResult
+                        : null,
               ),
               if (latestTurnResult != null) ...[
                 const SizedBox(height: AppSpacing.lg),
@@ -649,8 +673,8 @@ class _ActiveBattleHud extends StatelessWidget {
                     children: [
                       Text(
                         latestTurnResult!.defenderDefeated
-                            ? 'Golpe definitivo'
-                            : 'Daño aplicado',
+                            ? strings.finalBlow
+                            : strings.damageApplied,
                         style: theme.textTheme.titleMedium?.copyWith(
                           color: Colors.white,
                           fontWeight: FontWeight.w900,
@@ -658,9 +682,11 @@ class _ActiveBattleHud extends StatelessWidget {
                       ),
                       const SizedBox(height: AppSpacing.xs),
                       Text(
-                        latestTurnResult!.defenderDefeated
-                            ? 'El Pokémon defensor quedó fuera de combate tras recibir ${latestTurnResult!.damage} de daño.'
-                            : 'El defensor recibió ${latestTurnResult!.damage} de daño y quedó con ${latestTurnResult!.defenderRemainingHp} PS.',
+                        strings.damageSummary(
+                          defeated: latestTurnResult!.defenderDefeated,
+                          damage: latestTurnResult!.damage,
+                          remainingHp: latestTurnResult!.defenderRemainingHp,
+                        ),
                         style: theme.textTheme.bodyMedium?.copyWith(
                           color: Colors.white70,
                         ),
@@ -668,7 +694,9 @@ class _ActiveBattleHud extends StatelessWidget {
                       if (latestTurnResult!.autoSwitchedPokemon?.pokemon != null) ...[
                         const SizedBox(height: AppSpacing.sm),
                         Text(
-                          'Cambio automático: ${latestTurnResult!.autoSwitchedPokemon!.pokemon!.name} entró al campo.',
+                          strings.autoSwitchSummary(
+                            latestTurnResult!.autoSwitchedPokemon!.pokemon!.name,
+                          ),
                           style: theme.textTheme.bodyMedium?.copyWith(
                             color: Colors.white,
                             fontWeight: FontWeight.w700,
@@ -687,6 +715,7 @@ class _ActiveBattleHud extends StatelessWidget {
             child: _BattlePauseOverlay(
               isSelfDisconnected: isSelfDisconnected,
               reconnectDeadlineAt: reconnectDeadlineAt,
+              strings: strings,
             ),
           ),
       ],
@@ -698,10 +727,12 @@ class _BattlePauseOverlay extends StatelessWidget {
   const _BattlePauseOverlay({
     required this.isSelfDisconnected,
     required this.reconnectDeadlineAt,
+    required this.strings,
   });
 
   final bool isSelfDisconnected;
   final DateTime? reconnectDeadlineAt;
+  final AppStrings strings;
 
   @override
   Widget build(BuildContext context) {
@@ -728,7 +759,7 @@ class _BattlePauseOverlay extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               StatusChip(
-                label: isSelfDisconnected ? 'RECONNECTING' : 'WAITING OPPONENT',
+                label: isSelfDisconnected ? strings.reconnecting : strings.waitingOpponent,
                 tone: isSelfDisconnected
                     ? StatusChipTone.warning
                     : StatusChipTone.info,
@@ -736,8 +767,8 @@ class _BattlePauseOverlay extends StatelessWidget {
               const SizedBox(height: AppSpacing.md),
               Text(
                 isSelfDisconnected
-                    ? 'Tu conexión salió de la arena'
-                    : 'Esperando al rival',
+                    ? strings.selfDisconnectedTitle
+                    : strings.waitingOpponent,
                 style: theme.textTheme.headlineSmall?.copyWith(
                   color: Colors.white,
                   fontWeight: FontWeight.w900,
@@ -746,14 +777,17 @@ class _BattlePauseOverlay extends StatelessWidget {
               const SizedBox(height: AppSpacing.sm),
               Text(
                 isSelfDisconnected
-                    ? 'La batalla seguirá en pausa hasta que la reconexión se resuelva o expire el contador.'
-                    : 'La arena está congelada mientras el otro jugador intenta volver.',
+                    ? strings.selfDisconnectedBody
+                    : strings.opponentDisconnectedBody,
                 style: theme.textTheme.bodyLarge?.copyWith(
                   color: Colors.white70,
                 ),
               ),
               const SizedBox(height: AppSpacing.lg),
-              _ReconnectCountdown(deadlineAt: reconnectDeadlineAt),
+              _ReconnectCountdown(
+                deadlineAt: reconnectDeadlineAt,
+                strings: strings,
+              ),
             ],
           ),
         ),
@@ -765,9 +799,11 @@ class _BattlePauseOverlay extends StatelessWidget {
 class _ReconnectCountdown extends StatefulWidget {
   const _ReconnectCountdown({
     required this.deadlineAt,
+    required this.strings,
   });
 
   final DateTime? deadlineAt;
+  final AppStrings strings;
 
   @override
   State<_ReconnectCountdown> createState() => _ReconnectCountdownState();
@@ -829,7 +865,7 @@ class _ReconnectCountdownState extends State<_ReconnectCountdown> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Tiempo restante',
+            widget.strings.reconnectCountdown,
             style: theme.textTheme.labelLarge?.copyWith(
               color: Colors.white70,
               letterSpacing: 1.1,
@@ -855,11 +891,15 @@ class _ActivePokemonPanel extends StatelessWidget {
     required this.label,
     required this.pokemon,
     required this.alignEnd,
+    required this.strings,
+    this.damageContext,
   });
 
   final String label;
   final BattlePokemonSnapshot? pokemon;
   final bool alignEnd;
+  final AppStrings strings;
+  final TurnResultSnapshot? damageContext;
 
   @override
   Widget build(BuildContext context) {
@@ -868,13 +908,23 @@ class _ActivePokemonPanel extends StatelessWidget {
         ? 0.0
         : (pokemon!.currentHp / pokemon!.hp).clamp(0, 1).toDouble();
 
-    return Container(
+    final tookDamage = damageContext != null;
+    final ko = damageContext?.defenderDefeated ?? false;
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 240),
       width: double.infinity,
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.08),
+        color: tookDamage
+            ? AppColors.danger.withValues(alpha: 0.14)
+            : Colors.white.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(AppRadii.lg),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+        border: Border.all(
+          color: tookDamage
+              ? AppColors.danger.withValues(alpha: 0.48)
+              : Colors.white.withValues(alpha: 0.08),
+        ),
       ),
       child: Column(
         crossAxisAlignment:
@@ -890,10 +940,13 @@ class _ActivePokemonPanel extends StatelessWidget {
             ),
           ),
           const SizedBox(height: AppSpacing.sm),
-          _PokemonVisual(sprite: pokemon?.sprite),
+          _PokemonVisual(
+            sprite: pokemon?.sprite,
+            pulseDanger: tookDamage,
+          ),
           const SizedBox(height: AppSpacing.md),
           Text(
-            pokemon?.name ?? 'Sin datos',
+            pokemon?.name ?? strings.offlineFallback,
             style: theme.textTheme.titleLarge?.copyWith(
               color: Colors.white,
               fontWeight: FontWeight.w900,
@@ -903,11 +956,26 @@ class _ActivePokemonPanel extends StatelessWidget {
           const SizedBox(height: AppSpacing.xs),
           Text(
             pokemon == null
-                ? 'Esperando snapshot de backend.'
-                : 'PS ${pokemon!.currentHp} / ${pokemon!.hp}',
+                ? strings.waitingSnapshot
+                : strings.hpCounter(pokemon!.currentHp, pokemon!.hp),
             style: theme.textTheme.bodyMedium?.copyWith(color: Colors.white70),
             textAlign: alignEnd ? TextAlign.right : TextAlign.left,
           ),
+          if (damageContext != null) ...[
+            const SizedBox(height: AppSpacing.sm),
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 220),
+              child: Text(
+                strings.koLabel(damageContext!.damage, ko),
+                key: ValueKey('${damageContext!.battleId}-${damageContext!.damage}-${ko ? 'ko' : 'hit'}'),
+                style: TextStyle(
+                  color: ko ? AppColors.warning : AppColors.danger,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ),
+          ],
           const SizedBox(height: AppSpacing.sm),
           ClipRRect(
             borderRadius: BorderRadius.circular(AppRadii.pill),
@@ -933,35 +1001,53 @@ class _ActivePokemonPanel extends StatelessWidget {
 class _PokemonVisual extends StatelessWidget {
   const _PokemonVisual({
     required this.sprite,
+    this.pulseDanger = false,
   });
 
   final String? sprite;
+  final bool pulseDanger;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 120,
-      height: 120,
-      padding: const EdgeInsets.all(AppSpacing.md),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(24),
-      ),
-      child: sprite == null
-          ? const Icon(
-              Icons.catching_pokemon_rounded,
-              size: 48,
-              color: Colors.white70,
-            )
-          : Image.network(
-              sprite!,
-              fit: BoxFit.contain,
-              errorBuilder: (context, error, stackTrace) => const Icon(
+    return AnimatedScale(
+      duration: const Duration(milliseconds: 220),
+      scale: pulseDanger ? 0.95 : 1,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 220),
+        width: 120,
+        height: 120,
+        padding: const EdgeInsets.all(AppSpacing.md),
+        decoration: BoxDecoration(
+          color: pulseDanger
+              ? AppColors.danger.withValues(alpha: 0.14)
+              : Colors.white.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(24),
+          boxShadow: pulseDanger
+              ? [
+                  BoxShadow(
+                    color: AppColors.danger.withValues(alpha: 0.2),
+                    blurRadius: 18,
+                    spreadRadius: 2,
+                  ),
+                ]
+              : const [],
+        ),
+        child: sprite == null
+            ? const Icon(
                 Icons.catching_pokemon_rounded,
                 size: 48,
                 color: Colors.white70,
+              )
+            : Image.network(
+                sprite!,
+                fit: BoxFit.contain,
+                errorBuilder: (context, error, stackTrace) => const Icon(
+                  Icons.catching_pokemon_rounded,
+                  size: 48,
+                  color: Colors.white70,
+                ),
               ),
-            ),
+      ),
     );
   }
 }
@@ -971,11 +1057,13 @@ class _BattleResultPanel extends StatelessWidget {
     required this.result,
     required this.sessionPlayerId,
     required this.onDismiss,
+    required this.strings,
   });
 
   final BattleEndSnapshot result;
   final String? sessionPlayerId;
   final VoidCallback onDismiss;
+  final AppStrings strings;
 
   @override
   Widget build(BuildContext context) {
@@ -997,12 +1085,12 @@ class _BattleResultPanel extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           StatusChip(
-            label: won ? 'VICTORY' : 'DEFEAT',
+            label: won ? strings.victoryChip : strings.defeatChip,
             tone: won ? StatusChipTone.success : StatusChipTone.dark,
           ),
           const SizedBox(height: AppSpacing.md),
           Text(
-            won ? 'Ganaste la batalla' : 'Perdiste la batalla',
+            strings.battleResultTitle(won),
             style: theme.textTheme.headlineSmall?.copyWith(
               color: Colors.white,
               fontWeight: FontWeight.w900,
@@ -1010,66 +1098,54 @@ class _BattleResultPanel extends StatelessWidget {
           ),
           const SizedBox(height: AppSpacing.sm),
           Text(
-            _resultCopy(result, won),
+            strings.resultCopy(
+              won: won,
+              byDisconnect: result.reason == 'disconnect_timeout',
+            ),
             style: theme.textTheme.bodyLarge?.copyWith(color: Colors.white70),
           ),
           const SizedBox(height: AppSpacing.lg),
           PrimaryButton(
-            label: 'Cerrar resultado',
+            label: strings.closeResult,
             onPressed: onDismiss,
           ),
         ],
       ),
     );
   }
-
-  String _resultCopy(BattleEndSnapshot result, bool won) {
-    if (result.reason == 'disconnect_timeout') {
-      return won
-          ? 'El rival no volvió a conectarse antes del límite.'
-          : 'Tu sesión perdió la batalla por timeout de reconexión.';
-    }
-
-    return won
-        ? 'Tu equipo cerró el combate con ventaja y aseguró la victoria.'
-        : 'Tu equipo quedó sin respuesta en esta arena.';
-  }
 }
 
-String _titleForState(BattleFlowState state) {
+String _titleForState(BattleFlowState state, AppStrings strings) {
   return switch (state.stage) {
-    BattleStage.idle => 'Sala de batalla',
-    BattleStage.reconnecting => 'Recuperando sesión',
-    BattleStage.searching => 'Buscando rival',
-    BattleStage.matched => 'Rival encontrado',
-    BattleStage.battling => 'Batalla activa',
-    BattleStage.result => 'Resultado final',
+    BattleStage.idle => strings.battleIdleTitle,
+    BattleStage.reconnecting => strings.battleReconnectingTitle,
+    BattleStage.searching => strings.battleSearchingTitle,
+    BattleStage.matched => strings.battleMatchedTitle,
+    BattleStage.battling => strings.battleActiveTitle,
+    BattleStage.result => strings.battleResult,
   };
 }
 
 String _subtitleForState(
   BattleFlowState state, {
+  required AppStrings strings,
   required String? opponentNickname,
   required String? sessionPlayerId,
   required BattleEndSnapshot? battleResult,
 }) {
   return switch (state.stage) {
-    BattleStage.idle =>
-      'La arena está lista. Inicia matchmaking sólo cuando quieras entrar a la cola.',
-    BattleStage.reconnecting =>
-      'La app está intentando rehidratar tu sala o batalla desde el backend.',
-    BattleStage.searching =>
-      'Permaneces en cola hasta encontrar un rival compatible.',
-    BattleStage.matched =>
-      'Ya hay rival en la sala${opponentNickname == null ? '' : ': $opponentNickname'}. Asigna equipo y marca listo.',
+    BattleStage.idle => strings.battleIdleSubtitle,
+    BattleStage.reconnecting => strings.battleReconnectingSubtitle,
+    BattleStage.searching => strings.battleSearchingSubtitle,
+    BattleStage.matched => strings.matchedBattleIntro(opponentNickname),
     BattleStage.battling => state.isBattlePaused
-        ? 'La arena está en pausa mientras se resuelve una reconexión.'
-        : 'El combate ya está activo. Ataca sólo cuando el turno te pertenezca.',
+        ? strings.battlePausedSubtitle
+        : strings.activeBattleIntro(opponentNickname),
     BattleStage.result => battleResult == null
-        ? 'El backend marcó el cierre de la batalla.'
+        ? strings.battleResultPendingSubtitle
         : battleResult.winnerPlayerId == sessionPlayerId
-            ? 'La arena ya resolvió el resultado a tu favor.'
-            : 'La arena cerró el resultado del lado rival.',
+            ? strings.battleResultWonSubtitle
+            : strings.battleResultLostSubtitle,
   };
 }
 

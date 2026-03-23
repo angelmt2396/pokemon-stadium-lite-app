@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:pokemon_stadium_lite_app/core/i18n/app_strings.dart';
 import 'package:pokemon_stadium_lite_app/core/socket/socket_client.dart';
 import 'package:pokemon_stadium_lite_app/features/battle/data/battle_socket_client.dart';
 import 'package:pokemon_stadium_lite_app/features/battle/domain/battle_flow_state.dart';
@@ -19,6 +20,8 @@ class BattleController extends AutoDisposeNotifier<BattleFlowState> {
   String? _bootstrapKey;
   Timer? _searchTicker;
   bool _didRegisterSessionListener = false;
+
+  AppStrings get _strings => ref.read(appStringsProvider);
 
   @override
   BattleFlowState build() {
@@ -68,7 +71,7 @@ class BattleController extends AutoDisposeNotifier<BattleFlowState> {
     state = state.copyWith(
       actionPending: true,
       clearErrorMessage: true,
-      infoMessage: 'Conectando arena...',
+      infoMessage: _strings.battleRoom,
       clearInfoMessage: false,
     );
 
@@ -94,8 +97,8 @@ class BattleController extends AutoDisposeNotifier<BattleFlowState> {
         clearSearchStartedAt: stage != BattleStage.searching,
         clearErrorMessage: true,
         infoMessage: stage == BattleStage.searching
-            ? 'Buscando rival en la cola.'
-            : 'Rival detectado. La siguiente fase asignará equipos.',
+            ? _strings.searchRival
+            : _strings.battleSearchingInfo,
       );
     } catch (error) {
       state = state.copyWith(
@@ -136,7 +139,9 @@ class BattleController extends AutoDisposeNotifier<BattleFlowState> {
         clearBattleResult: true,
         clearSearchStartedAt: true,
         clearErrorMessage: true,
-        infoMessage: ack.canceled ? 'La búsqueda fue cancelada.' : 'La arena volvió a espera.',
+        infoMessage: ack.canceled
+            ? _strings.cancelSearch
+            : _strings.battleSearchCancelledInfo,
       );
     } catch (error) {
       state = state.copyWith(
@@ -158,14 +163,14 @@ class BattleController extends AutoDisposeNotifier<BattleFlowState> {
     }
 
     if (battleState.currentTurnPlayerId != session.playerId) {
-      state = state.copyWith(errorMessage: 'Aún no es tu turno.');
+      state = state.copyWith(errorMessage: _strings.waitingTurn);
       return;
     }
 
     state = state.copyWith(
       actionPending: true,
       clearErrorMessage: true,
-      infoMessage: 'Enviando ataque...',
+      infoMessage: _strings.attacking,
     );
 
     try {
@@ -174,8 +179,8 @@ class BattleController extends AutoDisposeNotifier<BattleFlowState> {
       state = state.copyWith(
         actionPending: false,
         infoMessage: ack.accepted
-            ? 'Ataque enviado. Esperando resolución.'
-            : 'El backend rechazó el ataque.',
+            ? _strings.attackSentInfo
+            : _strings.attackRejectedInfo,
       );
     } catch (error) {
       state = state.copyWith(
@@ -199,7 +204,7 @@ class BattleController extends AutoDisposeNotifier<BattleFlowState> {
       clearLatestTurnResult: true,
       clearBattleResult: true,
       clearSearchStartedAt: true,
-      infoMessage: 'La arena quedó lista para una nueva búsqueda.',
+        infoMessage: _strings.battleReadyForNewSearch,
     );
   }
 
@@ -213,7 +218,7 @@ class BattleController extends AutoDisposeNotifier<BattleFlowState> {
     state = state.copyWith(
       actionPending: true,
       clearErrorMessage: true,
-      infoMessage: 'Asignando equipos aleatorios...',
+      infoMessage: _strings.assigningTeams,
     );
 
     try {
@@ -225,7 +230,7 @@ class BattleController extends AutoDisposeNotifier<BattleFlowState> {
         stage: _deriveStage(ack.lobbyStatus),
         lobbyStatus: ack.lobbyStatus,
         clearErrorMessage: true,
-        infoMessage: 'Equipo asignado. Marca listo para iniciar combate.',
+        infoMessage: _strings.teamAssignedInfo,
       );
     } catch (error) {
       state = state.copyWith(
@@ -245,7 +250,7 @@ class BattleController extends AutoDisposeNotifier<BattleFlowState> {
     state = state.copyWith(
       actionPending: true,
       clearErrorMessage: true,
-      infoMessage: 'Sincronizando ready state...',
+      infoMessage: _strings.syncingReady,
     );
 
     try {
@@ -277,7 +282,7 @@ class BattleController extends AutoDisposeNotifier<BattleFlowState> {
         stage: BattleStage.reconnecting,
         connectionStatus: BattleConnectionStatus.connecting,
         clearErrorMessage: true,
-        infoMessage: 'Rehidratando sala activa...',
+        infoMessage: _strings.reconnecting,
       );
 
       try {
@@ -306,12 +311,12 @@ class BattleController extends AutoDisposeNotifier<BattleFlowState> {
           clearSearchStartedAt: stage != BattleStage.searching,
           clearErrorMessage: true,
           infoMessage: stage == BattleStage.matched
-              ? 'Sala recuperada. Esperando siguiente paso.'
+              ? _strings.battleRecoveredWaiting
               : stage == BattleStage.searching
-                  ? 'Volviste a la cola activa.'
+                  ? _strings.battleReturnedToQueue
                   : battleState?.reconnectDeadlineAt != null
-                      ? 'La batalla sigue pausada mientras se resuelve una reconexión.'
-                      : 'Se restauró una batalla activa.',
+                      ? _strings.battleRecoveredPaused
+                      : _strings.battleRecoveredActive,
         );
       } catch (error) {
         state = state.copyWith(
@@ -339,6 +344,7 @@ class BattleController extends AutoDisposeNotifier<BattleFlowState> {
       _client = BattleSocketClient(
         sessionToken: session.sessionToken,
         socketFactory: ref.read(socketFactoryProvider),
+        strings: _strings,
       );
       _sessionToken = session.sessionToken;
       _bindClient(_client!, session.playerId);
@@ -374,7 +380,7 @@ class BattleController extends AutoDisposeNotifier<BattleFlowState> {
             clearBattleResult: true,
             searchStartedAt: state.searchStartedAt ?? DateTime.now(),
             clearErrorMessage: true,
-            infoMessage: 'Buscando rival en la cola.',
+            infoMessage: _strings.searchRival,
           );
           return;
         }
@@ -388,7 +394,9 @@ class BattleController extends AutoDisposeNotifier<BattleFlowState> {
           clearBattleResult: true,
           clearSearchStartedAt: true,
           clearErrorMessage: true,
-          infoMessage: event.canceled ? 'La búsqueda fue cancelada.' : 'La arena quedó libre.',
+          infoMessage: event.canceled
+              ? _strings.cancelSearch
+              : _strings.battleArenaFreed,
         );
       },
       onLobbyStatus: (status) {
@@ -404,7 +412,7 @@ class BattleController extends AutoDisposeNotifier<BattleFlowState> {
           clearSearchStartedAt: stage != BattleStage.searching,
           clearErrorMessage: true,
           infoMessage: stage == BattleStage.matched
-              ? 'Rival detectado. La siguiente fase asignará equipos.'
+              ? _strings.battleSearchingInfo
               : state.infoMessage,
         );
         unawaited(
@@ -425,7 +433,7 @@ class BattleController extends AutoDisposeNotifier<BattleFlowState> {
           clearBattleResult: true,
           clearSearchStartedAt: true,
           clearErrorMessage: true,
-          infoMessage: 'Rival encontrado. La siguiente fase asignará equipos.',
+          infoMessage: _strings.battleSearchingInfo,
         );
         unawaited(
           ref.read(sessionControllerProvider.notifier).updateRuntimeSession(
@@ -467,7 +475,7 @@ class BattleController extends AutoDisposeNotifier<BattleFlowState> {
       clearLatestTurnResult: true,
       clearBattleResult: true,
       clearErrorMessage: true,
-      infoMessage: 'Esperando al rival para iniciar combate.',
+      infoMessage: _strings.waitingRival,
     );
   }
 
@@ -486,7 +494,7 @@ class BattleController extends AutoDisposeNotifier<BattleFlowState> {
       clearBattleResult: true,
       clearSearchStartedAt: true,
       clearErrorMessage: true,
-      infoMessage: 'La batalla ya comenzó.',
+      infoMessage: _strings.battleStarted,
     );
   }
 
@@ -509,8 +517,8 @@ class BattleController extends AutoDisposeNotifier<BattleFlowState> {
       clearBattleResult: true,
       clearErrorMessage: true,
       infoMessage: isSelfDisconnected
-          ? 'Tu conexión salió de la arena. Reingresa antes de que termine el contador.'
-          : 'El rival se desconectó. La batalla está en pausa.',
+          ? _strings.battlePauseSelfInfo
+          : _strings.waitingOpponent,
     );
   }
 
@@ -532,7 +540,7 @@ class BattleController extends AutoDisposeNotifier<BattleFlowState> {
       clearLatestTurnResult: true,
       clearBattleResult: true,
       clearErrorMessage: true,
-      infoMessage: 'La batalla se reanudó.',
+      infoMessage: _strings.battleResumedInfo,
     );
   }
 
@@ -559,7 +567,7 @@ class BattleController extends AutoDisposeNotifier<BattleFlowState> {
         players: updatedPlayers,
       ),
       clearErrorMessage: true,
-      infoMessage: 'El turno se resolvió.',
+      infoMessage: _strings.damageApplied,
     );
   }
 
@@ -576,7 +584,7 @@ class BattleController extends AutoDisposeNotifier<BattleFlowState> {
       battleResult: result,
       clearSearchStartedAt: true,
       clearErrorMessage: true,
-      infoMessage: 'El combate terminó.',
+      infoMessage: _strings.battleResult,
     );
   }
 

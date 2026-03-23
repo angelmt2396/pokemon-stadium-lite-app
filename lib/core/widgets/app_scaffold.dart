@@ -12,6 +12,7 @@ class AppScaffold extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      resizeToAvoidBottomInset: true,
       body: Container(
         decoration: const BoxDecoration(
           gradient: LinearGradient(
@@ -23,7 +24,13 @@ class AppScaffold extends StatelessWidget {
             ],
           ),
         ),
-        child: SafeArea(child: child),
+        child: GestureDetector(
+          onTap: () => FocusScope.of(context).unfocus(),
+          child: SafeArea(
+            maintainBottomViewPadding: true,
+            child: child,
+          ),
+        ),
       ),
     );
   }
