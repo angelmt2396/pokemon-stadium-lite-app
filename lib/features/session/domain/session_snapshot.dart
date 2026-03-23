@@ -19,6 +19,29 @@ class SessionSnapshot {
 
   bool get hasActiveBattle => currentBattleId != null || currentLobbyId != null;
 
+  SessionSnapshot copyWith({
+    String? sessionToken,
+    String? playerId,
+    String? nickname,
+    String? playerStatus,
+    String? currentLobbyId,
+    bool clearCurrentLobbyId = false,
+    String? currentBattleId,
+    bool clearCurrentBattleId = false,
+    String? reconnectToken,
+    bool clearReconnectToken = false,
+  }) {
+    return SessionSnapshot(
+      sessionToken: sessionToken ?? this.sessionToken,
+      playerId: playerId ?? this.playerId,
+      nickname: nickname ?? this.nickname,
+      playerStatus: playerStatus ?? this.playerStatus,
+      currentLobbyId: clearCurrentLobbyId ? null : currentLobbyId ?? this.currentLobbyId,
+      currentBattleId: clearCurrentBattleId ? null : currentBattleId ?? this.currentBattleId,
+      reconnectToken: clearReconnectToken ? null : reconnectToken ?? this.reconnectToken,
+    );
+  }
+
   Map<String, dynamic> toJson() {
     return {
       'sessionToken': sessionToken,

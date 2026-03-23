@@ -38,6 +38,10 @@ class SessionRepository {
     await _apiClient.closeSession(session.sessionToken);
     await _localDataSource.clear();
   }
+
+  Future<void> persist(SessionSnapshot session) async {
+    await _localDataSource.write(session);
+  }
 }
 
 final sessionRepositoryProvider = Provider<SessionRepository>((ref) {

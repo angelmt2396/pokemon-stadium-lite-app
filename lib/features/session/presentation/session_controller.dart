@@ -70,6 +70,34 @@ class SessionController extends Notifier<SessionState> {
   void clearError() {
     state = state.copyWith(clearError: true);
   }
+
+  Future<void> updateRuntimeSession({
+    String? playerStatus,
+    String? currentLobbyId,
+    bool clearCurrentLobbyId = false,
+    String? currentBattleId,
+    bool clearCurrentBattleId = false,
+    String? reconnectToken,
+    bool clearReconnectToken = false,
+  }) async {
+    final currentSession = state.session;
+    if (currentSession == null) {
+      return;
+    }
+
+    final updatedSession = currentSession.copyWith(
+      playerStatus: playerStatus,
+      currentLobbyId: currentLobbyId,
+      clearCurrentLobbyId: clearCurrentLobbyId,
+      currentBattleId: currentBattleId,
+      clearCurrentBattleId: clearCurrentBattleId,
+      reconnectToken: reconnectToken,
+      clearReconnectToken: clearReconnectToken,
+    );
+
+    await ref.read(sessionRepositoryProvider).persist(updatedSession);
+    state = SessionState.authenticated(updatedSession);
+  }
 }
 
 final sessionControllerProvider =
