@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:pokemon_stadium_lite_app/core/network/network_error.dart';
 import 'package:pokemon_stadium_lite_app/features/session/data/session_api_client.dart';
 import 'package:pokemon_stadium_lite_app/features/session/data/session_local_data_source.dart';
 import 'package:pokemon_stadium_lite_app/features/session/domain/session_snapshot.dart';
@@ -35,7 +36,13 @@ class SessionRepository {
   }
 
   Future<void> logout(SessionSnapshot session) async {
-    await _apiClient.closeSession(session.sessionToken);
+    try {
+      await _apiClient.closeSession(session.sessionToken);
+    } catch (error) {
+      if (!isUnauthorizedNetworkError(error)) {
+        rethrow;
+      }
+    }
     await _localDataSource.clear();
   }
 

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pokemon_stadium_lite_app/core/i18n/app_strings.dart';
+import 'package:pokemon_stadium_lite_app/core/network/network_error.dart';
 import 'package:pokemon_stadium_lite_app/features/session/data/session_repository.dart';
 import 'package:pokemon_stadium_lite_app/features/session/domain/session_state.dart';
 
@@ -47,9 +48,11 @@ class SessionController extends Notifier<SessionState> {
       state = SessionState.authenticated(session);
     } catch (error) {
       state = SessionState.unauthenticated(
-        errorMessage: error is Exception
-            ? error.toString().replaceFirst('Exception: ', '')
-            : strings.loginFailed,
+        errorMessage: normalizeNetworkError(
+          error,
+          isEs: strings.isEs,
+          fallbackMessage: strings.loginFailed,
+        ),
       );
     }
   }
@@ -67,9 +70,11 @@ class SessionController extends Notifier<SessionState> {
       state = const SessionState.unauthenticated();
     } catch (error) {
       state = state.copyWith(
-        errorMessage: error is Exception
-            ? error.toString().replaceFirst('Exception: ', '')
-            : strings.logoutFailed,
+        errorMessage: normalizeNetworkError(
+          error,
+          isEs: strings.isEs,
+          fallbackMessage: strings.logoutFailed,
+        ),
       );
     }
   }
