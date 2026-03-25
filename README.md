@@ -1,6 +1,6 @@
 # Pokemon Stadium Lite App
 
-Aplicación mobile de `Pokemon Stadium Lite` construida con Flutter.
+Aplicacion mobile de `Pokemon Stadium Lite` construida con Flutter.
 
 ## Estado actual
 
@@ -16,12 +16,31 @@ La app ya incluye:
 - reconexión, pausa y resultado final
 - animaciones y overlays mobile alineados con la referencia web
 
-Validación real en esta etapa:
+Validacion real en esta etapa:
 
 - Android: sí probado
 - iOS: no probado
 
-La implementación y el flujo actual deben considerarse validados sólo para Android.
+La implementacion y el flujo actual deben considerarse validados solo para Android.
+
+## Documentacion del proyecto
+
+La documentacion del repo ya no vive solo en este archivo.
+
+Mapa rapido:
+
+- [docs/README.md](./docs/README.md)
+- [docs/mobile-flows.md](./docs/mobile-flows.md)
+- [docs/mobile-implementation-reference.md](./docs/mobile-implementation-reference.md)
+- [docs/mobile-qa-checklist.md](./docs/mobile-qa-checklist.md)
+- [docs/ui-ux-improvement-proposal.md](./docs/ui-ux-improvement-proposal.md)
+
+Estas guias sirven para:
+
+- validar flujos funcionales
+- entender el contrato actual app-backend
+- revisar decisiones de implementacion
+- tener referencia de UX para nuevos cambios
 
 ## Stack
 
@@ -113,6 +132,24 @@ Si no mandas `--dart-define`, la app usa defaults por plataforma:
 - Web / iOS Simulator / macOS: `http://localhost:3000`
 
 Esto existe para que el emulador Android pueda hablar con el backend local de tu máquina sin depender de una IP LAN cambiante.
+
+## Contrato operativo actual
+
+El comportamiento actual de mobile contra backend se apoya en estas reglas:
+
+- `sessionToken` es la identidad operativa de REST y Socket.IO
+- el socket debe conectarse con `auth.sessionToken`
+- `search_match` se emite con payload `{}` y el backend resuelve la identidad del jugador desde la sesion autenticada
+- el `reconnectToken` del ack de matchmaking debe persistirse y reutilizarse en `reconnect_player`
+- si el backend expira o rota el `sessionToken`, la app debe reconstruir la sesion y el socket con el nuevo token
+- si la sesion local sigue marcando lobby o batalla activa, mobile entra en modo `reconnecting` al abrir la pantalla de battle
+- al volver de background/foreground, la app sincroniza sesion para corregir CTAs, sesiones reclamadas, lobby activo y batalla pausada
+- mientras exista un lobby o batalla activa local, la app hace sincronizacion silenciosa de sesion para evitar estado visual obsoleto
+
+Referencia complementaria:
+
+- backend: `pokemon-stadium-lite-backend/docs/socket-contracts.md`
+- mobile: [docs/mobile-implementation-reference.md](./docs/mobile-implementation-reference.md)
 
 ## Cómo correr contra backend local
 
@@ -210,9 +247,9 @@ El soporte validado actualmente es:
 
 iOS no se considera cerrado ni validado todavía.
 
-### 5. Un `401` en sesión suele significar sesión expirada
+### 5. Un `401` en sesion suele significar sesion expirada
 
-La app limpia sesión inválida restaurada y normaliza los errores HTTP de login/logout para no mostrar `DioException` crudo.
+La app limpia sesion invalida restaurada, puede reclamar una sesion nueva con el mismo nickname si el backend invalido el token anterior y normaliza errores HTTP/socket para no mostrar `DioException` crudo.
 
 ### 6. El backend debe soportar HTTP y Socket.IO
 
@@ -220,6 +257,14 @@ Para que battle funcione bien, el backend debe exponer:
 
 - REST de sesión y catálogo
 - canal Socket.IO de matchmaking y battle
+
+### 7. La presencia de socket ya importa para UX
+
+Con el backend actual, el socket ya no es un detalle secundario:
+
+- si el socket se cae estando `idle`, la sesion puede quedar reclamable
+- si el socket se cae en batalla, el backend pausa la batalla y aplica una ventana de tolerancia
+- la UI debe reflejar `reconnecting`, `paused`, `battle_end` y cambios de sesion sin depender de un refresh manual
 
 ## Comandos útiles
 
@@ -276,6 +321,11 @@ flutter run -d <device-id>
 
 Todas estas pruebas corresponden al flujo Android validado.
 
+Checklists y flujos mas detallados:
+
+- [docs/mobile-flows.md](./docs/mobile-flows.md)
+- [docs/mobile-qa-checklist.md](./docs/mobile-qa-checklist.md)
+
 ## Estructura
 
 ```txt
@@ -304,8 +354,14 @@ test/
 
 - `lib/core/config/app_config.dart`
 - `lib/core/network/api_client.dart`
+- `lib/core/network/network_error.dart`
+- `lib/core/socket/socket_client.dart`
 - `lib/features/session/`
 - `lib/features/battle/`
+
+Referencia ampliada:
+
+- [docs/mobile-implementation-reference.md](./docs/mobile-implementation-reference.md)
 
 ## Troubleshooting
 
@@ -332,14 +388,17 @@ Verifica:
 
 Posibles causas:
 
-- sesión vieja persistida
+- sesion vieja persistida
 - token inválido
-- backend reiniciado y la sesión ya no existe
+- backend reiniciado y la sesion ya no existe
+- token invalidado por `disconnect_timeout`
+- sesion reclamada desde otra instancia despues de una desconexion `idle`
 
 Prueba:
 
 - cerrar y abrir la app
-- volver a iniciar sesión
+- volver a iniciar sesion
+- revisar si el socket y REST apuntan al mismo entorno
 
 ### Matchmaking o battle no avanzan
 
@@ -348,9 +407,12 @@ Verifica:
 - que REST y Socket.IO apunten al mismo backend
 - que el backend esté emitiendo `match_found`, `lobby_status` y `battle_start`
 - que el otro cliente esté conectado al mismo entorno
+- que el cliente haya persistido el `reconnectToken`
+- que el socket se haya reconstruido si cambio el `sessionToken`
 
 ## Backend relacionado
 
 Si necesitas correr el backend local, revisa:
 
 - el `README.md` del proyecto `pokemon-stadium-lite-backend`
+- `pokemon-stadium-lite-backend/docs/socket-contracts.md`
