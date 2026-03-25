@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:pokemon_stadium_lite_app/core/i18n/app_strings.dart';
+import 'package:pokemon_stadium_lite_app/core/network/network_error.dart';
 import 'package:pokemon_stadium_lite_app/core/theme/app_colors.dart';
 import 'package:pokemon_stadium_lite_app/core/theme/app_radii.dart';
 import 'package:pokemon_stadium_lite_app/core/theme/app_spacing.dart';
@@ -103,7 +104,11 @@ class HealthScreen extends ConsumerWidget {
                     ),
                     const SizedBox(height: AppSpacing.sm),
                     Text(
-                      error.toString().replaceFirst('Exception: ', ''),
+                      normalizeNetworkError(
+                        error,
+                        isEs: strings.isEs,
+                        fallbackMessage: strings.healthUnavailable,
+                      ),
                       style: theme.textTheme.bodyLarge,
                     ),
                     const SizedBox(height: AppSpacing.lg),
@@ -121,4 +126,3 @@ class HealthScreen extends ConsumerWidget {
     );
   }
 }
-

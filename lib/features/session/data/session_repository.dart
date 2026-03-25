@@ -16,6 +16,23 @@ class SessionRepository {
     return session;
   }
 
+  Future<SessionSnapshot> sync(SessionSnapshot session) async {
+    try {
+      final refreshedSession = await _apiClient.getCurrentSession(
+        session.sessionToken,
+        reconnectToken: session.reconnectToken,
+      );
+      await _localDataSource.write(refreshedSession);
+      return refreshedSession;
+    } catch (error) {
+      if (isExpiredSessionError(error)) {
+        return login(session.nickname);
+      }
+
+      rethrow;
+    }
+  }
+
   Future<SessionSnapshot?> restore() async {
     final persisted = await _localDataSource.read();
     if (persisted == null) {
@@ -23,12 +40,7 @@ class SessionRepository {
     }
 
     try {
-      final session = await _apiClient.getCurrentSession(
-        persisted.sessionToken,
-        reconnectToken: persisted.reconnectToken,
-      );
-      await _localDataSource.write(session);
-      return session;
+      return await sync(persisted);
     } catch (_) {
       await _localDataSource.clear();
       return null;

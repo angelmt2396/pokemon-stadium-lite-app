@@ -11,6 +11,17 @@ String normalizeNetworkError(
       return responseMessage;
     }
 
+    final dioMessage = _sanitizeMessage(error.message);
+    if (dioMessage != null &&
+        error.type != DioExceptionType.badResponse &&
+        error.type != DioExceptionType.connectionError &&
+        error.type != DioExceptionType.connectionTimeout &&
+        error.type != DioExceptionType.sendTimeout &&
+        error.type != DioExceptionType.receiveTimeout &&
+        error.type != DioExceptionType.cancel) {
+      return dioMessage;
+    }
+
     return switch (error.type) {
       DioExceptionType.connectionTimeout ||
       DioExceptionType.sendTimeout ||
@@ -32,8 +43,9 @@ String normalizeNetworkError(
     };
   }
 
-  if (error is Exception) {
-    return error.toString().replaceFirst('Exception: ', '');
+  final extractedMessage = _extractErrorMessage(error);
+  if (extractedMessage != null && extractedMessage.isNotEmpty) {
+    return extractedMessage;
   }
 
   return fallbackMessage;
@@ -41,6 +53,15 @@ String normalizeNetworkError(
 
 bool isUnauthorizedNetworkError(Object error) {
   return error is DioException && error.response?.statusCode == 401;
+}
+
+bool isExpiredSessionError(Object error) {
+  if (isUnauthorizedNetworkError(error)) {
+    return true;
+  }
+
+  final message = _extractErrorMessage(error)?.toLowerCase();
+  return message != null && message.contains('invalid or expired session token');
 }
 
 String _messageForStatusCode(
@@ -72,25 +93,92 @@ String _messageForStatusCode(
 }
 
 String? _extractResponseMessage(dynamic data) {
+  if (data is String) {
+    return _sanitizeMessage(data);
+  }
+
   if (data is Map<String, dynamic>) {
-    final candidate = data['message'] ?? data['error'];
-    if (candidate is String) {
-      return candidate;
+    for (final key in const ['message', 'error', 'detail', 'description', 'title']) {
+      final candidate = _extractResponseMessage(data[key]);
+      if (candidate != null && candidate.isNotEmpty) {
+        return candidate;
+      }
     }
 
-    final nestedData = data['data'];
-    if (nestedData is Map<String, dynamic>) {
-      final nestedCandidate = nestedData['message'] ?? nestedData['error'];
-      if (nestedCandidate is String) {
-        return nestedCandidate;
+    for (final key in const ['data', 'details', 'errors']) {
+      final candidate = _extractResponseMessage(data[key]);
+      if (candidate != null && candidate.isNotEmpty) {
+        return candidate;
       }
     }
   }
 
-  if (data is Map) {
+  if (data is Map && data is! Map<String, dynamic>) {
     final map = Map<String, dynamic>.from(data);
     return _extractResponseMessage(map);
   }
 
+  if (data is List) {
+    for (final entry in data) {
+      final candidate = _extractResponseMessage(entry);
+      if (candidate != null && candidate.isNotEmpty) {
+        return candidate;
+      }
+    }
+  }
+
   return null;
+}
+
+String? _extractErrorMessage(Object error) {
+  if (error is String) {
+    return _sanitizeMessage(error);
+  }
+
+  if (error is Map<String, dynamic>) {
+    return _extractResponseMessage(error);
+  }
+
+  if (error is Map && error is! Map<String, dynamic>) {
+    return _extractResponseMessage(Map<String, dynamic>.from(error));
+  }
+
+  if (error is Exception || error is Error) {
+    return _sanitizeMessage(error.toString());
+  }
+
+  return null;
+}
+
+String? _sanitizeMessage(String? rawMessage) {
+  if (rawMessage == null) {
+    return null;
+  }
+
+  final message = rawMessage.trim();
+  if (message.isEmpty || message == 'null') {
+    return null;
+  }
+
+  final withoutExceptionPrefix = message.replaceFirst(RegExp(r'^Exception:\s*'), '');
+  final firstLine = withoutExceptionPrefix
+      .split('\n')
+      .map((line) => line.trim())
+      .firstWhere((line) => line.isNotEmpty, orElse: () => '');
+
+  if (firstLine.isEmpty) {
+    return null;
+  }
+
+  final lowerFirstLine = firstLine.toLowerCase();
+  if (lowerFirstLine.startsWith('dioexception') ||
+      lowerFirstLine.startsWith('socketexception:') ||
+      lowerFirstLine.startsWith('websocketexception:') ||
+      lowerFirstLine.startsWith('httpexception:') ||
+      lowerFirstLine.startsWith('transporterror:') ||
+      lowerFirstLine == 'xmlhttprequest error') {
+    return null;
+  }
+
+  return firstLine;
 }

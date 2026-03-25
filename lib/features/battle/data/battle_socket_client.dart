@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pokemon_stadium_lite_app/core/i18n/app_strings.dart';
+import 'package:pokemon_stadium_lite_app/core/network/network_error.dart';
 import 'package:pokemon_stadium_lite_app/core/socket/socket_client.dart';
 import 'package:pokemon_stadium_lite_app/core/socket/socket_events.dart';
 import 'package:pokemon_stadium_lite_app/features/battle/domain/battle_end_snapshot.dart';
@@ -227,7 +228,7 @@ class BattleSocketClient {
     _socket.on('connect', (_) => onConnected?.call());
     _socket.on('disconnect', (_) => onDisconnected?.call());
     _socket.on('connect_error', (error) {
-      onConnectError?.call(error?.toString() ?? _strings.socketConnectFailed);
+      onConnectError?.call(_normalizeSocketError(error));
     });
     _socket.on(SocketEvents.serverSearchStatus, (payload) {
       onSearchStatus?.call(SearchStatusEvent.fromJson(_mapOf(payload)));
@@ -291,7 +292,7 @@ class BattleSocketClient {
       cleanup();
       if (!completer.isCompleted) {
         completer.completeError(
-          Exception(error?.toString() ?? _strings.socketConnectFailed),
+          Exception(_normalizeSocketError(error)),
         );
       }
     };
@@ -377,7 +378,13 @@ class BattleSocketClient {
   Map<String, dynamic> _unwrapAckData(Map<String, dynamic> response) {
     final ok = response['ok'] as bool? ?? false;
     if (!ok) {
-      throw Exception(response['message'] as String? ?? _strings.socketGenericError);
+      throw Exception(
+        normalizeNetworkError(
+          response,
+          isEs: _strings.isEs,
+          fallbackMessage: _strings.socketGenericError,
+        ),
+      );
     }
 
     final data = response['data'];
@@ -398,6 +405,14 @@ class BattleSocketClient {
     }
 
     return <String, dynamic>{};
+  }
+
+  String _normalizeSocketError(dynamic error) {
+    return normalizeNetworkError(
+      error ?? _strings.socketConnectFailed,
+      isEs: _strings.isEs,
+      fallbackMessage: _strings.socketConnectFailed,
+    );
   }
 }
 

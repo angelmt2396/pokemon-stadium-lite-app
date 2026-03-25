@@ -70,7 +70,8 @@ class BattleScreen extends ConsumerStatefulWidget {
   ConsumerState<BattleScreen> createState() => _BattleScreenState();
 }
 
-class _BattleScreenState extends ConsumerState<BattleScreen> {
+class _BattleScreenState extends ConsumerState<BattleScreen>
+    with WidgetsBindingObserver {
   final List<_BattleCinematic> _cinematicQueue = <_BattleCinematic>[];
   _BattleCinematic? _activeCinematic;
   _ImpactCue? _impactCue;
@@ -83,6 +84,7 @@ class _BattleScreenState extends ConsumerState<BattleScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _uiStateSubscription = ref.listenManual<BattleUiState>(
       battleUiStateProvider,
       (previous, next) {
@@ -97,11 +99,21 @@ class _BattleScreenState extends ConsumerState<BattleScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _uiStateSubscription?.close();
     _cinematicTimer?.cancel();
     _impactCueTimer?.cancel();
     _turnPulseTimer?.cancel();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed) {
+      return;
+    }
+
+    unawaited(ref.read(battleControllerProvider.notifier).handleAppResumed());
   }
 
   @override

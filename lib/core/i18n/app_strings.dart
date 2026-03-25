@@ -108,6 +108,9 @@ class AppStrings {
   String get loadingCatalog => isEs ? 'Cargando catálogo...' : 'Loading catalog...';
   String get catalogEmpty => isEs ? 'El catálogo llegó vacío.' : 'The catalog came back empty.';
   String get catalogErrorTitle => isEs ? 'No se pudo cargar el catálogo.' : 'Could not load the catalog.';
+  String get catalogDetailError => isEs
+      ? 'No se pudo cargar el detalle del Pokémon.'
+      : 'Could not load the Pokemon detail.';
   String get retry => isEs ? 'Intentar de nuevo' : 'Try again';
   String get availableRoster => isEs ? 'Roster disponible' : 'Available roster';
   String get noDetail => isEs ? 'Sin detalle seleccionado.' : 'No selected detail.';

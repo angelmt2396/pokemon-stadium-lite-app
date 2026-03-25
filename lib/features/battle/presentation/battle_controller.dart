@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pokemon_stadium_lite_app/core/i18n/app_strings.dart';
+import 'package:pokemon_stadium_lite_app/core/network/network_error.dart';
 import 'package:pokemon_stadium_lite_app/core/socket/socket_client.dart';
 import 'package:pokemon_stadium_lite_app/features/battle/data/battle_socket_client.dart';
 import 'package:pokemon_stadium_lite_app/features/battle/domain/battle_flow_state.dart';
@@ -31,6 +32,7 @@ class BattleController extends AutoDisposeNotifier<BattleFlowState> {
   @override
   BattleFlowState build() {
     ref.onDispose(_dispose);
+    final initialSession = ref.read(sessionControllerProvider).session;
 
     if (!_didRegisterSessionListener) {
       _didRegisterSessionListener = true;
@@ -45,13 +47,21 @@ class BattleController extends AutoDisposeNotifier<BattleFlowState> {
         }
       });
 
-      final initialSession = ref.read(sessionControllerProvider).session;
       final initialBootstrapKey = initialSession?.sessionToken;
       _bootstrapKey = initialBootstrapKey;
       Future<void>.microtask(() => _bootstrap(initialSession));
     }
 
-    return const BattleFlowState.initial();
+    final shouldReconnect = initialSession != null &&
+        (initialSession.currentLobbyId != null || initialSession.currentBattleId != null);
+
+    return shouldReconnect
+        ? const BattleFlowState.initial().copyWith(
+            stage: BattleStage.reconnecting,
+            connectionStatus: BattleConnectionStatus.connecting,
+            infoMessage: _strings.reconnecting,
+          )
+        : const BattleFlowState.initial();
   }
 
   Duration? get searchElapsed {
@@ -109,10 +119,17 @@ class BattleController extends AutoDisposeNotifier<BattleFlowState> {
       );
       _scheduleLobbyAutomation();
     } catch (error) {
+      if (await _recoverExpiredSession(error)) {
+        return;
+      }
       state = state.copyWith(
         actionPending: false,
         clearInfoMessage: true,
-        errorMessage: _normalizeError(error),
+        errorMessage: normalizeNetworkError(
+          error,
+          isEs: _strings.isEs,
+          fallbackMessage: _strings.socketGenericError,
+        ),
       );
     }
   }
@@ -154,9 +171,16 @@ class BattleController extends AutoDisposeNotifier<BattleFlowState> {
       );
       _trace('cancel_search_ack', lobbyId: ack.lobbyId, canceled: ack.canceled);
     } catch (error) {
+      if (await _recoverExpiredSession(error)) {
+        return;
+      }
       state = state.copyWith(
         actionPending: false,
-        errorMessage: _normalizeError(error),
+        errorMessage: normalizeNetworkError(
+          error,
+          isEs: _strings.isEs,
+          fallbackMessage: _strings.socketGenericError,
+        ),
       );
     }
   }
@@ -193,9 +217,16 @@ class BattleController extends AutoDisposeNotifier<BattleFlowState> {
             : _strings.attackRejectedInfo,
       );
     } catch (error) {
+      if (await _recoverExpiredSession(error)) {
+        return;
+      }
       state = state.copyWith(
         actionPending: false,
-        errorMessage: _normalizeError(error),
+        errorMessage: normalizeNetworkError(
+          error,
+          isEs: _strings.isEs,
+          fallbackMessage: _strings.socketGenericError,
+        ),
       );
     }
   }
@@ -246,9 +277,16 @@ class BattleController extends AutoDisposeNotifier<BattleFlowState> {
       );
       _scheduleLobbyAutomation();
     } catch (error) {
+      if (await _recoverExpiredSession(error)) {
+        return;
+      }
       state = state.copyWith(
         actionPending: false,
-        errorMessage: _normalizeError(error),
+        errorMessage: normalizeNetworkError(
+          error,
+          isEs: _strings.isEs,
+          fallbackMessage: _strings.socketGenericError,
+        ),
       );
       _autoAssignInFlight = false;
     }
@@ -272,15 +310,44 @@ class BattleController extends AutoDisposeNotifier<BattleFlowState> {
       final ack = await client.markReady(lobbyId);
       await _applyReadyAck(ack);
     } catch (error) {
+      if (await _recoverExpiredSession(error)) {
+        return;
+      }
       state = state.copyWith(
         actionPending: false,
-        errorMessage: _normalizeError(error),
+        errorMessage: normalizeNetworkError(
+          error,
+          isEs: _strings.isEs,
+          fallbackMessage: _strings.socketGenericError,
+        ),
       );
       _autoReadyInFlight = false;
     }
   }
 
-  Future<void> _bootstrap(SessionSnapshot? session) async {
+  Future<void> handleAppResumed() async {
+    await ref
+        .read(sessionControllerProvider.notifier)
+        .syncCurrentSessionSilently(force: true);
+
+    final session = ref.read(sessionControllerProvider).session;
+    if (session == null) {
+      _client?.dispose();
+      _client = null;
+      _sessionToken = null;
+      state = const BattleFlowState.initial();
+      return;
+    }
+
+    final shouldRehydrate = session.currentLobbyId != null || session.currentBattleId != null;
+    if (!shouldRehydrate && state.connectionStatus != BattleConnectionStatus.disconnected) {
+      return;
+    }
+
+    await _bootstrap(session, force: true);
+  }
+
+  Future<void> _bootstrap(SessionSnapshot? session, {bool force = false}) async {
     _setSearchTicker(false);
 
     if (session == null) {
@@ -299,7 +366,7 @@ class BattleController extends AutoDisposeNotifier<BattleFlowState> {
         state.stage != BattleStage.idle &&
         state.stage != BattleStage.reconnecting;
 
-    if (alreadyHydratedBattle || alreadyHydratedLobby) {
+    if (!force && (alreadyHydratedBattle || alreadyHydratedLobby)) {
       _trace(
         'bootstrap_skipped',
         lobbyId: session.currentLobbyId,
@@ -353,6 +420,9 @@ class BattleController extends AutoDisposeNotifier<BattleFlowState> {
         );
         _scheduleLobbyAutomation();
       } catch (error) {
+        if (await _recoverExpiredSession(error)) {
+          return;
+        }
         state = state.copyWith(
           stage: BattleStage.idle,
           connectionStatus: BattleConnectionStatus.disconnected,
@@ -361,7 +431,11 @@ class BattleController extends AutoDisposeNotifier<BattleFlowState> {
           clearLatestTurnResult: true,
           clearBattleResult: true,
           clearSearchStartedAt: true,
-          errorMessage: _normalizeError(error),
+          errorMessage: normalizeNetworkError(
+            error,
+            isEs: _strings.isEs,
+            fallbackMessage: _strings.socketGenericError,
+          ),
           clearInfoMessage: true,
         );
       }
@@ -746,8 +820,31 @@ class BattleController extends AutoDisposeNotifier<BattleFlowState> {
     return 'searching';
   }
 
-  String _normalizeError(Object error) {
-    return error.toString().replaceFirst('Exception: ', '');
+  Future<bool> _recoverExpiredSession(Object error) async {
+    if (!isExpiredSessionError(error)) {
+      return false;
+    }
+
+    final recoveredSession = await ref
+        .read(sessionControllerProvider.notifier)
+        .recoverExpiredSession();
+
+    _setSearchTicker(false);
+    _client?.dispose();
+    _client = null;
+    _sessionToken = null;
+    _autoAssignLobbyId = null;
+    _autoReadyLobbyId = null;
+    _autoAssignInFlight = false;
+    _autoReadyInFlight = false;
+
+    if (recoveredSession != null) {
+      state = const BattleFlowState.initial().copyWith(
+        infoMessage: _strings.battleReadyForNewSearch,
+      );
+    }
+
+    return true;
   }
 
   void _scheduleLobbyAutomation() {
